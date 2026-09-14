@@ -1,0 +1,6 @@
+{
+  "name": "Effortless Education",
+  "description": "Premium online English learning center offering General English, IELTS preparation, and group courses via Zoom.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
