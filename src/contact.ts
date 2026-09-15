@@ -230,6 +230,7 @@ export async function deliverEnrolment(e: Enrolment): Promise<boolean> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
+        _subject: `Enrolment ${e.reference} — ${e.course}`,
         reference: e.reference,
         name: fullName(e),
         phone: e.phone,
@@ -244,7 +245,6 @@ export async function deliverEnrolment(e: Enrolment): Promise<boolean> {
         fee: money(e.fee),
         notes: e.notes,
         receipt: receiptText(e),
-        _subject: `Enrolment ${e.reference} — ${e.course}`,
       }),
     });
     return res.ok;

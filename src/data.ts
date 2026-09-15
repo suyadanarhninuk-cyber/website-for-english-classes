@@ -79,12 +79,16 @@ export const site = {
   facebook: "https://www.facebook.com/profile.php?id=100063772011423",
   instagram: "",
 
-  // ── Where a copy of every receipt is delivered ───────────────────
-  // Leave "" and enrolment still works: the student gets a receipt on
-  // screen and is passed to your Jotform, which you already receive.
+  // ── Email alerts to your Gmail ───────────────────────────────────
   // Paste a Formspree address here (https://formspree.io/f/abcdwxyz)
-  // and a copy of every receipt also lands in your email inbox by
-  // itself, before the student has paid anything.
+  // and you get an email the moment a student enrols, a teacher applies
+  // or changes their hours, or a student leaves a review.
+  //
+  // To set it up: sign up free at formspree.io using your Gmail address,
+  // create a form, and paste the address it gives you below.
+  //
+  // Leave "" and nothing breaks — everything still arrives in your admin
+  // page, you just have to look rather than be told.
   formEndpoint: ""
 };
 
