@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import {
   CheckCircle2, ChevronRight, Clock, Copy, Check, Printer, User, Users, ExternalLink,
 } from 'lucide-react';
-import { teachers, oneToOneLevels, groupCourses, site, payment } from '../data';
+import { oneToOneLevels, site, payment } from '../data';
+import { monthLabel, thisMonth, useContent } from '../content';
 import {
   Enrolment,
   deliverEnrolment,
@@ -20,9 +21,9 @@ import Receipt from './Receipt';
 
 type BookingMode = 'one-to-one' | 'group' | null;
 
-const liveTeachers = teachers.filter(t => t.status !== 'pending');
-
 export default function BookingSection() {
+  const { teachers, groupClasses, months } = useContent();
+
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<BookingMode>(null);
 
@@ -44,11 +45,24 @@ export default function BookingSection() {
   const [issued, setIssued] = useState<Enrolment | null>(null);
   const [copied, setCopied] = useState(false);
 
+  /* The group courses on offer: this month's batch when the database is
+     driving things, otherwise everything in src/data.ts. */
+  const bookableGroup = useMemo(() => {
+    if (months.length === 0) return groupClasses;
+    const now = thisMonth();
+    const month = months.find(m => m >= now) ?? months[months.length - 1];
+    return groupClasses.filter(c => c.month === month);
+  }, [groupClasses, months]);
+
+  const groupMonth = months.length
+    ? (months.find(m => m >= thisMonth()) ?? months[months.length - 1])
+    : '';
+
   /* "Book with this teacher" buttons in the teachers section land here. */
   useEffect(() => {
     const handler = (ev: Event) => {
       const name = (ev as CustomEvent<{ name: string }>).detail?.name;
-      const t = liveTeachers.find(x => x.name === name);
+      const t = teachers.find(x => x.name === name);
       if (!t) return;
       setIssued(null);
       setMode('one-to-one');
@@ -60,7 +74,7 @@ export default function BookingSection() {
     };
     window.addEventListener('ee:select-teacher', handler);
     return () => window.removeEventListener('ee:select-teacher', handler);
-  }, []);
+  }, [teachers]);
 
   const chooseMode = (m: BookingMode) => {
     setMode(m);
@@ -73,23 +87,23 @@ export default function BookingSection() {
   const chooseLevel = (id: string) => {
     setLevelId(id);
     if (teacherName) {
-      const t = liveTeachers.find(x => x.name === teacherName);
+      const t = teachers.find(x => x.name === teacherName);
       if (!t || !t.levels.includes(id)) setTeacherName('');
     }
     setSlotIdxs([]);
   };
 
   const matchingTeachers = useMemo(
-    () => (levelId ? liveTeachers.filter(t => t.levels.includes(levelId)) : []),
-    [levelId],
+    () => (levelId ? teachers.filter(t => t.levels.includes(levelId)) : []),
+    [levelId, teachers],
   );
 
-  const teacher = liveTeachers.find(t => t.name === teacherName) || null;
+  const teacher = teachers.find(t => t.name === teacherName) || null;
   const slots = useMemo(() => (teacher ? expandSlots(teacher) : []), [teacher]);
   const chosenSlots = slotIdxs.map(i => slots[i]).filter(Boolean).map(slotLabel);
 
   const levelObj = oneToOneLevels.find(l => l.id === levelId);
-  const groupObj = groupCourses.find(g => g.name === groupCourse);
+  const groupObj = bookableGroup.find(g => g.name === groupCourse);
   const fee = levelObj?.fee ?? groupObj?.fee ?? 0;
 
   const toggleSlot = (i: number) =>
@@ -125,8 +139,10 @@ export default function BookingSection() {
       course: mode === 'group' ? groupCourse : levelObj?.name || '',
       hours: mode === 'group' ? null : levelObj?.hours ?? null,
       teacher: mode === 'group' ? '' : teacherName,
-      slots: mode === 'group' ? [] : chosenSlots,
-      startDate: mode === 'group' ? '' : startDate,
+      slots: mode === 'group'
+        ? (groupObj?.schedule ? [groupObj.schedule] : [])
+        : chosenSlots,
+      startDate: mode === 'group' ? (groupObj?.start_date ?? '') : startDate,
       fee,
     };
 
@@ -200,7 +216,7 @@ export default function BookingSection() {
                       <div className="text-sm text-gray-500 mt-1">
                         {n === 1 && selectionLabel()}
                         {n === 2 && (mode === 'group'
-                          ? 'We confirm the next batch'
+                          ? 'Fixed group timetable'
                           : teacherName || 'Pick a teacher and times')}
                         {n === 3 && (firstName ? `${firstName} ${lastName}`.trim() : 'Name and contact')}
                         {n === 4 && (issued ? issued.reference : 'Print it or send it to us')}
@@ -268,15 +284,33 @@ export default function BookingSection() {
 
                 {mode === 'group' && (
                   <div className="space-y-2 flex-grow">
-                    {groupCourses.map(g => (
-                      <button key={g.name} type="button" onClick={() => setGroupCourse(g.name)}
+                    {groupMonth && (
+                      <p className="text-sm font-semibold text-indigo-700 mb-2">
+                        {monthLabel(groupMonth)} timetable
+                      </p>
+                    )}
+                    {bookableGroup.map(g => (
+                      <button key={g.id} type="button" onClick={() => setGroupCourse(g.name)}
                         className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
                           groupCourse === g.name ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'
                         }`}>
-                        <span className="font-semibold text-gray-900">{g.name}</span>
+                        <span>
+                          <span className="block font-semibold text-gray-900">{g.name}</span>
+                          {(g.schedule || g.seats) && (
+                            <span className="block text-xs text-gray-500 mt-1">
+                              {g.schedule}{g.schedule && g.seats ? ' · ' : ''}{g.seats}
+                            </span>
+                          )}
+                        </span>
                         <span className="font-bold text-indigo-600 whitespace-nowrap">{money(g.fee)}</span>
                       </button>
                     ))}
+                    {bookableGroup.length === 0 && (
+                      <p className="text-sm text-gray-600 py-6">
+                        No group classes are open at the moment. Message us and we will tell you when the
+                        next batch starts.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -295,7 +329,7 @@ export default function BookingSection() {
                 <div className="flex items-center gap-4 mb-6">
                   <button type="button" onClick={() => setStep(1)} className="text-sm font-medium text-gray-500 hover:text-gray-900">Back</button>
                   <h4 className="text-2xl font-bold text-gray-900">
-                    {mode === 'group' ? 'Group timetable' : 'Choose your teacher and times'}
+                    {mode === 'group' ? 'Your group timetable' : 'Choose your teacher and times'}
                   </h4>
                 </div>
 
@@ -361,11 +395,21 @@ export default function BookingSection() {
                 ) : (
                   <div className="flex-grow flex flex-col items-center justify-center text-center p-8 bg-gray-50 rounded-xl border border-gray-100">
                     <Users className="w-12 h-12 text-indigo-300 mb-4" />
-                    <h5 className="text-lg font-bold text-gray-900 mb-2">Group course timings</h5>
-                    <p className="text-gray-600 max-w-md">
-                      Group courses run on a fixed timetable. Send your details and we will reply with the
-                      next batch times before you pay.
-                    </p>
+                    <h5 className="text-lg font-bold text-gray-900 mb-2">{groupCourse}</h5>
+                    {groupObj?.schedule && <p className="text-gray-900 font-medium">{groupObj.schedule}</p>}
+                    {groupObj?.start_date && (
+                      <p className="text-gray-600 mt-1">
+                        Starts {new Date(groupObj.start_date).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'long', year: 'numeric',
+                        })}
+                      </p>
+                    )}
+                    {!groupObj?.schedule && (
+                      <p className="text-gray-600 max-w-md">
+                        Group courses run on a fixed timetable. Send your details and we will reply with the
+                        next batch times before you pay.
+                      </p>
+                    )}
                   </div>
                 )}
 

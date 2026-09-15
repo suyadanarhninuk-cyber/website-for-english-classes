@@ -1,11 +1,26 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Users, User, BookOpen, Clock, Check } from 'lucide-react';
-import { oneToOneLevels, groupCourses, site, generalEnglishNote, payment } from '../data';
+import { oneToOneLevels, site, generalEnglishNote, payment } from '../data';
+import { monthLabel, thisMonth, useContent } from '../content';
 
 export default function Services() {
+  const { groupClasses, months } = useContent();
   const generalEnglish = oneToOneLevels.filter(l => l.course === 'general');
   const ieltsOneToOne = oneToOneLevels.filter(l => l.course === 'ielts');
+
+  /* When the database holds monthly timetables, show this month first —
+     or the next month that has classes in it. */
+  const [month, setMonth] = useState('');
+  useEffect(() => {
+    if (months.length === 0) { setMonth(''); return; }
+    const now = thisMonth();
+    setMonth(months.find(m => m >= now) ?? months[months.length - 1]);
+  }, [months]);
+
+  const shown = months.length > 0
+    ? groupClasses.filter(c => c.month === month)
+    : groupClasses;
 
   return (
     <section id="services" className="py-24 bg-gray-50 no-print">
@@ -20,7 +35,7 @@ export default function Services() {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          
+
           {/* General English (1-on-1) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -34,7 +49,7 @@ export default function Services() {
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">General English</h3>
             <p className="text-gray-500 mb-4">One-to-One interactive sessions</p>
-            
+
             <div className="bg-amber-50 border border-amber-100 text-amber-800 text-sm p-3 rounded-lg mb-6 font-medium">
               {generalEnglishNote.burmese}<br/>
               <span className="text-amber-700/80 text-xs mt-1 block">{generalEnglishNote.english}</span>
@@ -55,7 +70,7 @@ export default function Services() {
                 </div>
               ))}
             </div>
-            
+
             <a href="#booking" className="w-full block text-center py-3 bg-indigo-50 text-indigo-700 font-semibold rounded-xl hover:bg-indigo-100 transition-colors">
               Book General English
             </a>
@@ -89,7 +104,7 @@ export default function Services() {
                 </div>
               ))}
             </div>
-            
+
             <a href="#booking" className="w-full block text-center py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors">
               Book IELTS 1-on-1
             </a>
@@ -107,22 +122,57 @@ export default function Services() {
               <Users className="w-6 h-6" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Group Courses</h3>
-            <p className="text-gray-500 mb-6">Learn together in an interactive setting</p>
+            <p className="text-gray-500 mb-4">Learn together in an interactive setting</p>
+
+            {months.length > 1 && (
+              <div className="flex flex-wrap gap-2 mb-5">
+                {months.map(m => (
+                  <button key={m} type="button" onClick={() => setMonth(m)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      month === m ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200'
+                    }`}>
+                    {monthLabel(m)}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {months.length === 1 && (
+              <p className="text-sm font-semibold text-indigo-700 mb-4">{monthLabel(months[0])} timetable</p>
+            )}
 
             <div className="space-y-3 flex-grow mb-8">
-              {groupCourses.map((course, idx) => (
-                <div key={idx} className="flex justify-between items-center group">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span className="text-gray-700 text-sm font-medium">{course.name}</span>
+              {shown.map(course => (
+                <div key={course.id} className="border-b border-gray-50 pb-3 last:border-0">
+                  <div className="flex justify-between items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-green-500 shrink-0" />
+                      <span className="text-gray-700 text-sm font-medium">{course.name}</span>
+                    </div>
+                    <div className="font-bold text-gray-900 text-sm whitespace-nowrap">
+                      {course.fee.toLocaleString()} {site.currencySymbol}
+                    </div>
                   </div>
-                  <div className="font-bold text-gray-900 text-sm">
-                    {course.fee.toLocaleString()} Ks
-                  </div>
+                  {(course.schedule || course.start_date || course.seats) && (
+                    <div className="text-xs text-gray-500 mt-1 ml-6 space-x-2">
+                      {course.schedule && <span>{course.schedule}</span>}
+                      {course.start_date && (
+                        <span>· starts {new Date(course.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                      )}
+                      {course.seats && <span className="text-amber-600 font-medium">· {course.seats}</span>}
+                    </div>
+                  )}
                 </div>
               ))}
+
+              {shown.length === 0 && (
+                <p className="text-sm text-gray-500 py-6">
+                  No group classes are open for {month ? monthLabel(month) : 'this month'}. Message us and
+                  we will tell you when the next batch starts.
+                </p>
+              )}
             </div>
-            
+
             <a href="#booking" className="w-full block text-center py-3 bg-gray-50 text-gray-900 font-semibold rounded-xl hover:bg-gray-100 border border-gray-200 transition-colors">
               Join a Group Course
             </a>

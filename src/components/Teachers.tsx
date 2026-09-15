@@ -1,10 +1,7 @@
 import React from 'react';
 import { CalendarClock, Video } from 'lucide-react';
-import { teachers, oneToOneLevels, site } from '../data';
-
-/* Only teachers marked live in src/data.ts appear here. Anyone still set
-   to "pending" is invisible to students until you approve them. */
-const liveTeachers = teachers.filter(t => t.status !== 'pending');
+import { oneToOneLevels, site } from '../data';
+import { useContent } from '../content';
 
 const levelName = (id: string) =>
   oneToOneLevels.find(l => l.id === id)?.name ?? id;
@@ -15,7 +12,8 @@ function bookWith(name: string) {
 }
 
 export default function Teachers() {
-  if (liveTeachers.length === 0) return null;
+  const { teachers } = useContent();
+  if (teachers.length === 0) return null;
 
   return (
     <section id="teachers" className="py-24 bg-white no-print">
@@ -31,19 +29,21 @@ export default function Teachers() {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {liveTeachers.map(t => (
+          {teachers.map(t => (
             <div key={t.name} className="rounded-2xl border border-gray-200 p-6 flex flex-col">
               <h3 className="text-lg font-bold text-gray-900">{t.name}</h3>
 
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {t.levels.map(id => (
-                  <span key={id} className="text-xs font-medium px-2 py-1 rounded-md bg-indigo-50 text-indigo-700">
-                    {levelName(id)}
-                  </span>
-                ))}
-              </div>
+              {t.levels.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {t.levels.map(id => (
+                    <span key={id} className="text-xs font-medium px-2 py-1 rounded-md bg-indigo-50 text-indigo-700">
+                      {levelName(id)}
+                    </span>
+                  ))}
+                </div>
+              )}
 
-              <p className="text-sm text-gray-600 leading-relaxed mt-4">{t.blurb}</p>
+              {t.blurb && <p className="text-sm text-gray-600 leading-relaxed mt-4">{t.blurb}</p>}
 
               <div className="mt-5 pt-4 border-t border-gray-100 space-y-2 text-sm text-gray-600 flex-grow">
                 <div className="flex items-center gap-2 text-gray-500">
