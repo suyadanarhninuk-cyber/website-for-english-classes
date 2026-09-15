@@ -23,7 +23,7 @@ export default function Services() {
     : groupClasses;
 
   return (
-    <section id="services" className="py-24 bg-gray-50 no-print">
+    <section id="services" className="scroll-mt-20 py-24 bg-gray-50 no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Clear & Transparent Pricing</h2>
@@ -44,7 +44,7 @@ export default function Services() {
             transition={{ duration: 0.5 }}
             className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col h-full"
           >
-            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+            <div className="w-12 h-12 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mb-6">
               <User className="w-6 h-6" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">General English</h3>
@@ -64,14 +64,14 @@ export default function Services() {
                       <Clock className="w-3 h-3" /> {level.hours} hours
                     </div>
                   </div>
-                  <div className="font-bold text-indigo-600">
+                  <div className="font-bold text-brand-600">
                     {level.fee.toLocaleString()} {site.currencySymbol}
                   </div>
                 </div>
               ))}
             </div>
 
-            <a href="#booking" className="w-full block text-center py-3 bg-indigo-50 text-indigo-700 font-semibold rounded-xl hover:bg-indigo-100 transition-colors">
+            <a href="#booking" className="w-full block text-center py-3 bg-brand-50 text-brand-700 font-semibold rounded-xl hover:bg-brand-100 transition-colors">
               Book General English
             </a>
           </motion.div>
@@ -82,12 +82,12 @@ export default function Services() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="bg-white rounded-3xl p-8 shadow-xl border-2 border-indigo-600 flex flex-col h-full relative"
+            className="bg-white rounded-3xl p-8 shadow-xl border-2 border-brand-600 flex flex-col h-full relative"
           >
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-indigo-600 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-600 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
               Specialized
             </div>
-            <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mb-6">
+            <div className="w-12 h-12 bg-brand-600 text-white rounded-2xl flex items-center justify-center mb-6">
               <BookOpen className="w-6 h-6" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">IELTS Preparation</h3>
@@ -98,14 +98,14 @@ export default function Services() {
                 <div key={level.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                   <div className="flex justify-between items-start mb-2">
                     <div className="font-bold text-gray-900">{level.name}</div>
-                    <div className="font-bold text-indigo-600">{level.fee.toLocaleString()} {site.currencySymbol}</div>
+                    <div className="font-bold text-brand-600">{level.fee.toLocaleString()} {site.currencySymbol}</div>
                   </div>
                   <p className="text-sm text-gray-600 leading-relaxed">{level.description}</p>
                 </div>
               ))}
             </div>
 
-            <a href="#booking" className="w-full block text-center py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors">
+            <a href="#booking" className="w-full block text-center py-3 bg-brand-600 text-white font-semibold rounded-xl hover:bg-brand-700 transition-colors">
               Book IELTS 1-on-1
             </a>
           </motion.div>
@@ -118,7 +118,7 @@ export default function Services() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col h-full"
           >
-            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+            <div className="w-12 h-12 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mb-6">
               <Users className="w-6 h-6" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Group Courses</h3>
@@ -129,7 +129,7 @@ export default function Services() {
                 {months.map(m => (
                   <button key={m} type="button" onClick={() => setMonth(m)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                      month === m ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200'
+                      month === m ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-200'
                     }`}>
                     {monthLabel(m)}
                   </button>
@@ -138,7 +138,7 @@ export default function Services() {
             )}
 
             {months.length === 1 && (
-              <p className="text-sm font-semibold text-indigo-700 mb-4">{monthLabel(months[0])} timetable</p>
+              <p className="text-sm font-semibold text-brand-700 mb-4">{monthLabel(months[0])} timetable</p>
             )}
 
             <div className="space-y-3 flex-grow mb-8">

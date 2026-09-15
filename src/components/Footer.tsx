@@ -22,10 +22,11 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-white mb-4">Courses</h4>
             <ul className="space-y-3">
-              <li><a href="#services" className="text-gray-400 hover:text-indigo-400 transition-colors">General English</a></li>
-              <li><a href="#services" className="text-gray-400 hover:text-indigo-400 transition-colors">IELTS preparation</a></li>
-              <li><a href="#services" className="text-gray-400 hover:text-indigo-400 transition-colors">Group courses</a></li>
-              <li><a href="#faq" className="text-gray-400 hover:text-indigo-400 transition-colors">FAQ</a></li>
+              <li><a href="#services" className="text-gray-400 hover:text-brand-400 transition-colors">General English</a></li>
+              <li><a href="#services" className="text-gray-400 hover:text-brand-400 transition-colors">IELTS preparation</a></li>
+              <li><a href="#services" className="text-gray-400 hover:text-brand-400 transition-colors">Group courses</a></li>
+              <li><a href="#faq" className="text-gray-400 hover:text-brand-400 transition-colors">FAQ</a></li>
+              <li><a href="#teach" className="text-gray-400 hover:text-brand-400 transition-colors">Teach with us</a></li>
             </ul>
           </div>
 
@@ -34,26 +35,26 @@ export default function Footer() {
             <ul className="space-y-3">
               <li className="text-gray-400">{site.location}</li>
               <li>
-                <a href={`mailto:${site.email}`} className="text-gray-400 hover:text-indigo-400 transition-colors break-words">
+                <a href={`mailto:${site.email}`} className="text-gray-400 hover:text-brand-400 transition-colors break-words">
                   {site.email}
                 </a>
               </li>
               {site.phone && (
                 <li>
-                  <a href={`tel:${site.phone.replace(/\s+/g, '')}`} className="text-gray-400 hover:text-indigo-400 transition-colors">
+                  <a href={`tel:${site.phone.replace(/\s+/g, '')}`} className="text-gray-400 hover:text-brand-400 transition-colors">
                     {site.phone}
                   </a>
                 </li>
               )}
               {site.messenger && (
                 <li>
-                  <a href={site.messenger} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-indigo-400 transition-colors">
+                  <a href={site.messenger} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-brand-400 transition-colors">
                     Message us on Messenger
                   </a>
                 </li>
               )}
               {site.viber && (
-                <li><a href={site.viber} className="text-gray-400 hover:text-indigo-400 transition-colors">Viber</a></li>
+                <li><a href={site.viber} className="text-gray-400 hover:text-brand-400 transition-colors">Viber</a></li>
               )}
             </ul>
           </div>

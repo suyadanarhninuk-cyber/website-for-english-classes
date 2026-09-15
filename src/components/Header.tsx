@@ -19,6 +19,7 @@ export default function Header() {
           <a href="#services" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Courses & Pricing</a>
           <a href="#teachers" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Teachers</a>
           <a href="#faq" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">FAQ</a>
+          <a href="#teach" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Teach with us</a>
           <a href="#booking" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Book a Class</a>
         </nav>
 
@@ -29,7 +30,7 @@ export default function Header() {
         >
           <a 
             href="#booking" 
-            className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-full hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
+            className="px-5 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-full hover:bg-brand-700 transition-colors shadow-sm shadow-brand-200"
           >
             Enrol now
           </a>

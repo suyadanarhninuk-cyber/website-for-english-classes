@@ -30,7 +30,7 @@ export default function PaymentPanel({
   const ready = Boolean(file) || last6.trim().length >= 4;
 
   const field =
-    'w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all';
+    'w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all';
 
   return (
     <div className="space-y-6">

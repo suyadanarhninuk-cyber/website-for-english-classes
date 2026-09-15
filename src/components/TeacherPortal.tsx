@@ -22,7 +22,7 @@ export default function TeacherPortal() {
   const [error, setError] = useState('');
 
   const field =
-    'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none';
+    'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,10 +38,13 @@ export default function TeacherPortal() {
   };
 
   return (
-    <section id="teach" className="py-20 bg-gray-50 border-t border-gray-100 no-print">
+    <section id="teach" className="py-20 bg-gray-50 border-t-4 border-gold-500 scroll-mt-24 no-print">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-2 gap-10 items-start">
           <div>
+            <span className="inline-block px-3 py-1 rounded-full bg-gold-100 text-brand-700 text-xs font-bold tracking-wide uppercase mb-4">
+              For teachers
+            </span>
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight mb-4">
               Teaching with {site.shortName}
             </h2>
@@ -59,7 +62,7 @@ export default function TeacherPortal() {
           {!isLive && (
             <div className="space-y-3">
               <a href={forms.teacherRegistration} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-gray-200 hover:border-indigo-400 transition-colors">
+                className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-gray-200 hover:border-brand-400 transition-colors">
                 <span>
                   <span className="block font-semibold text-gray-900">New teacher</span>
                   <span className="block text-sm text-gray-600 mt-0.5">Register your courses and hours.</span>
@@ -67,7 +70,7 @@ export default function TeacherPortal() {
                 <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
               </a>
               <a href={forms.teacherUpdate || forms.teacherRegistration} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-gray-200 hover:border-indigo-400 transition-colors">
+                className="flex items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-gray-200 hover:border-brand-400 transition-colors">
                 <span>
                   <span className="block font-semibold text-gray-900">Already teaching with us</span>
                   <span className="block text-sm text-gray-600 mt-0.5">Change your hours or your classes.</span>
@@ -93,7 +96,7 @@ export default function TeacherPortal() {
                 {(['new', 'update'] as const).map(k => (
                   <button key={k} type="button" onClick={() => setKind(k)}
                     className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                      kind === k ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200'
+                      kind === k ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-200'
                     }`}>
                     {k === 'new' ? 'I am new' : 'Updating my hours'}
                   </button>
@@ -163,7 +166,7 @@ export default function TeacherPortal() {
               {error && <p className="text-sm text-red-600">{error}</p>}
 
               <button type="submit" disabled={sending}
-                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-60 transition-colors">
+                className="w-full py-3 bg-brand-600 text-white rounded-xl font-semibold hover:bg-brand-700 disabled:opacity-60 transition-colors">
                 {sending ? 'Sending…' : 'Send to Effortless Education'}
               </button>
             </form>

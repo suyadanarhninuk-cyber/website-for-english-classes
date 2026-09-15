@@ -20,14 +20,14 @@ function ReviewForm() {
   const [error, setError] = useState('');
 
   const field =
-    'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none';
+    'w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none';
 
   if (!isLive) {
     if (!forms.studentReview) return null;
     return (
       <div className="text-center mt-12">
         <a href={forms.studentReview} target="_blank" rel="noopener noreferrer"
-          className="inline-block px-6 py-3 rounded-xl border border-gray-300 font-semibold text-gray-800 hover:border-indigo-400 transition-colors">
+          className="inline-block px-6 py-3 rounded-xl border border-gray-300 font-semibold text-gray-800 hover:border-brand-400 transition-colors">
           Studied with us? Leave a review
         </a>
       </div>
@@ -49,7 +49,7 @@ function ReviewForm() {
     return (
       <div className="text-center mt-12">
         <button type="button" onClick={() => setOpen(true)}
-          className="px-6 py-3 rounded-xl border border-gray-300 font-semibold text-gray-800 hover:border-indigo-400 transition-colors">
+          className="px-6 py-3 rounded-xl border border-gray-300 font-semibold text-gray-800 hover:border-brand-400 transition-colors">
           Studied with us? Leave a review
         </button>
       </div>
@@ -94,7 +94,7 @@ function ReviewForm() {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={sending}
-        className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-60 transition-colors">
+        className="w-full py-3 bg-brand-600 text-white rounded-xl font-semibold hover:bg-brand-700 disabled:opacity-60 transition-colors">
         {sending ? 'Sending…' : 'Send review'}
       </button>
       <p className="text-xs text-center text-gray-500">
@@ -112,7 +112,7 @@ export default function Testimonials() {
   if (reviews.length === 0 && !isLive && !forms.studentReview) return null;
 
   return (
-    <section id="reviews" className="py-24 bg-white relative no-print">
+    <section id="reviews" className="scroll-mt-20 py-24 bg-white relative no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 tracking-tight">
@@ -122,7 +122,7 @@ export default function Testimonials() {
             Real feedback from students who have studied with {site.shortName}.
           </p>
           {reviewsNote && reviews.length > 0 && (
-            <p className="mt-4 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-sm font-medium border border-indigo-100">
+            <p className="mt-4 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-50 text-brand-700 text-sm font-medium border border-brand-100">
               {reviewsNote}
             </p>
           )}
@@ -136,13 +136,13 @@ export default function Testimonials() {
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: index * 0.08 }}
-              className="bg-indigo-50/50 rounded-3xl p-8 relative flex flex-col"
+              className="bg-brand-50/50 rounded-3xl p-8 relative flex flex-col"
             >
-              <Quote className="absolute top-6 right-6 w-8 h-8 text-indigo-200" aria-hidden="true" />
+              <Quote className="absolute top-6 right-6 w-8 h-8 text-brand-200" aria-hidden="true" />
 
               <div className="flex gap-1 text-amber-400 mb-6" aria-label={`${review.rating} out of 5`}>
                 {[1, 2, 3, 4, 5].map(i => (
-                  <Star key={i} className={`w-5 h-5 ${i <= review.rating ? 'fill-current' : 'text-indigo-200'}`} />
+                  <Star key={i} className={`w-5 h-5 ${i <= review.rating ? 'fill-current' : 'text-brand-200'}`} />
                 ))}
               </div>
 
@@ -151,12 +151,12 @@ export default function Testimonials() {
               </blockquote>
 
               <figcaption className="flex items-center gap-4 mt-auto">
-                <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold shrink-0">
+                <div className="w-12 h-12 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold shrink-0">
                   {initials(review.name)}
                 </div>
                 <div>
                   <div className="font-bold text-gray-900">{review.name}</div>
-                  <div className="text-sm text-indigo-600 font-medium">{review.course}</div>
+                  <div className="text-sm text-brand-600 font-medium">{review.course}</div>
                 </div>
               </figcaption>
             </motion.figure>

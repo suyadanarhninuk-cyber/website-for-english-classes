@@ -23,7 +23,7 @@ import { Availability } from '../data';
 type Tab = 'enrolments' | 'classes' | 'teachers' | 'reviews';
 
 const input =
-  'w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none';
+  'w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none';
 const btn =
   'px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50';
 
@@ -139,7 +139,7 @@ export default function Admin() {
               value={password} onChange={e => setPassword(e.target.value)} className={input} />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <button type="submit" disabled={busy} className={`${btn} w-full bg-indigo-600 text-white hover:bg-indigo-700 py-3`}>
+          <button type="submit" disabled={busy} className={`${btn} w-full bg-brand-600 text-white hover:bg-brand-700 py-3`}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
@@ -295,7 +295,7 @@ export default function Admin() {
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-3 text-sm font-semibold border-b-2 flex items-center gap-2 ${
-                tab === t.id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-900'
+                tab === t.id ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-900'
               }`}>
               {t.label}
               {!!t.count && (
@@ -357,7 +357,7 @@ export default function Admin() {
               <button onClick={addClass} className={`${btn} bg-white border border-gray-300 text-gray-700 flex items-center gap-2`}>
                 <Plus className="w-4 h-4" /> Add a class
               </button>
-              <button onClick={saveClasses} disabled={busy} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700 ml-auto`}>
+              <button onClick={saveClasses} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700 ml-auto`}>
                 {busy ? 'Saving…' : 'Save this month'}
               </button>
             </div>
@@ -468,7 +468,7 @@ export default function Admin() {
                     )}
 
                     <div className="flex flex-wrap gap-2 mt-4">
-                      <button onClick={() => publishSubmission(s)} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2`}>
+                      <button onClick={() => publishSubmission(s)} className={`${btn} bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2`}>
                         <Check className="w-4 h-4" /> Add to the website
                       </button>
                       <button onClick={async () => { await markSubmissionHandled(s.id, true); refresh(); }}
@@ -531,7 +531,7 @@ export default function Admin() {
                                   levels: on ? t.levels.filter(x => x !== l.id) : [...(t.levels ?? []), l.id],
                                 })}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                                  on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300'
+                                  on ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-300'
                                 }`}>
                                 {l.name}
                               </button>
@@ -557,7 +557,7 @@ export default function Admin() {
                     </div>
 
                     <div className="flex gap-2 mt-3">
-                      <button onClick={() => persistTeacher(t)} disabled={busy} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}>
+                      <button onClick={() => persistTeacher(t)} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
                         Save {t.name.split(' ')[0]}
                       </button>
                       <button onClick={() => removeTeacher(t)} className={`${btn} text-red-600 hover:bg-red-50 ml-auto`}>
@@ -698,7 +698,7 @@ function EnrolmentCard({
           </button>
         )}
         {row.status !== 'confirmed' && (
-          <button onClick={onConfirm} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2`}>
+          <button onClick={onConfirm} className={`${btn} bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2`}>
             <Check className="w-4 h-4" /> Confirm payment
           </button>
         )}
@@ -754,7 +754,7 @@ function ReviewCard({
       <p className="text-sm text-gray-700 mt-2 leading-relaxed">{review.quote}</p>
       <div className="flex gap-2 mt-3">
         {onApprove && (
-          <button onClick={onApprove} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2`}>
+          <button onClick={onApprove} className={`${btn} bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2`}>
             <Check className="w-4 h-4" /> Publish
           </button>
         )}

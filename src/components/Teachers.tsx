@@ -16,7 +16,7 @@ export default function Teachers() {
   if (teachers.length === 0) return null;
 
   return (
-    <section id="teachers" className="py-24 bg-white no-print">
+    <section id="teachers" className="scroll-mt-20 py-24 bg-white no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 tracking-tight">
@@ -36,7 +36,7 @@ export default function Teachers() {
               {t.levels.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {t.levels.map(id => (
-                    <span key={id} className="text-xs font-medium px-2 py-1 rounded-md bg-indigo-50 text-indigo-700">
+                    <span key={id} className="text-xs font-medium px-2 py-1 rounded-md bg-brand-50 text-brand-700">
                       {levelName(id)}
                     </span>
                   ))}
@@ -68,12 +68,22 @@ export default function Teachers() {
               </div>
 
               <button type="button" onClick={() => bookWith(t.name)}
-                className="mt-4 w-full py-3 bg-indigo-50 text-indigo-700 font-semibold rounded-xl hover:bg-indigo-100 transition-colors">
+                className="mt-4 w-full py-3 bg-brand-50 text-brand-700 font-semibold rounded-xl hover:bg-brand-100 transition-colors">
                 Book with {t.name.split(' ')[0]}
               </button>
             </div>
           ))}
         </div>
+
+        {/* Teachers browsing the site find their way in from here. */}
+        <a href="#teach"
+          className="mt-12 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center px-6 py-4 rounded-2xl border border-brand-200 bg-brand-50 hover:bg-brand-100 transition-colors">
+          <span className="font-semibold text-brand-700">Are you a teacher?</span>
+          <span className="text-sm text-gray-600">
+            Tell us your subjects and your free hours — we will match you with students.
+          </span>
+          <span className="font-semibold text-brand-700 whitespace-nowrap">Apply here →</span>
+        </a>
       </div>
     </section>
   );

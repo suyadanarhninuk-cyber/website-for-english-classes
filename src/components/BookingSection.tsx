@@ -262,19 +262,19 @@ export default function BookingSection() {
     : ['Course', 'Teacher & times', 'Your details', 'Receipt'];
   const lastStep = isLive ? 5 : 4;
   const field =
-    'w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all';
+    'w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all';
 
   return (
-    <section id="booking" className="py-24 bg-indigo-900 relative overflow-hidden print:bg-white print:py-0">
+    <section id="booking" className="scroll-mt-20 py-24 bg-brand-900 relative overflow-hidden print:bg-white print:py-0">
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 no-print">
-        <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-indigo-800/50 blur-3xl"></div>
-        <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-800/50 blur-3xl"></div>
+        <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-brand-800/50 blur-3xl"></div>
+        <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-brand-800/50 blur-3xl"></div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-12 no-print">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 tracking-tight">Book your classes</h2>
-          <p className="text-lg text-indigo-200">
+          <p className="text-lg text-brand-200">
             Pick your course, your teacher and your times. You get a receipt with your
             reference number straight away.
           </p>
@@ -293,7 +293,7 @@ export default function BookingSection() {
                 return (
                   <div className="flex gap-4" key={label}>
                     <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                      done ? 'bg-green-500 text-white' : current ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-400'
+                      done ? 'bg-green-500 text-white' : current ? 'bg-brand-600 text-white' : 'bg-gray-200 text-gray-400'
                     }`}>
                       {done ? <CheckCircle2 className="w-4 h-4" /> : <span className="text-xs font-bold">{n}</span>}
                     </div>
@@ -335,18 +335,18 @@ export default function BookingSection() {
                 <div className="grid sm:grid-cols-2 gap-4 mb-8">
                   <button type="button" onClick={() => chooseMode('one-to-one')}
                     className={`text-left p-5 rounded-2xl border-2 transition-colors ${
-                      mode === 'one-to-one' ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'
+                      mode === 'one-to-one' ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                     }`}>
-                    <User className="w-6 h-6 text-indigo-600 mb-3" />
+                    <User className="w-6 h-6 text-brand-600 mb-3" />
                     <div className="font-bold text-gray-900">One-to-one</div>
                     <div className="text-sm text-gray-600 mt-1">You choose the teacher and the hours.</div>
                   </button>
 
                   <button type="button" onClick={() => chooseMode('group')}
                     className={`text-left p-5 rounded-2xl border-2 transition-colors ${
-                      mode === 'group' ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'
+                      mode === 'group' ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                     }`}>
-                    <Users className="w-6 h-6 text-indigo-600 mb-3" />
+                    <Users className="w-6 h-6 text-brand-600 mb-3" />
                     <div className="font-bold text-gray-900">Group course</div>
                     <div className="text-sm text-gray-600 mt-1">Fixed timetable, learn with others.</div>
                   </button>
@@ -357,7 +357,7 @@ export default function BookingSection() {
                     {oneToOneLevels.map(l => (
                       <button key={l.id} type="button" onClick={() => chooseLevel(l.id)}
                         className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
-                          levelId === l.id ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'
+                          levelId === l.id ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                         }`}>
                         <span>
                           <span className="block font-semibold text-gray-900">{l.name}</span>
@@ -367,7 +367,7 @@ export default function BookingSection() {
                             </span>
                           )}
                         </span>
-                        <span className="font-bold text-indigo-600 whitespace-nowrap">{money(l.fee)}</span>
+                        <span className="font-bold text-brand-600 whitespace-nowrap">{money(l.fee)}</span>
                       </button>
                     ))}
                   </div>
@@ -376,14 +376,14 @@ export default function BookingSection() {
                 {mode === 'group' && (
                   <div className="space-y-2 flex-grow">
                     {groupMonth && (
-                      <p className="text-sm font-semibold text-indigo-700 mb-2">
+                      <p className="text-sm font-semibold text-brand-700 mb-2">
                         {monthLabel(groupMonth)} timetable
                       </p>
                     )}
                     {bookableGroup.map(g => (
                       <button key={g.id} type="button" onClick={() => setGroupCourse(g.name)}
                         className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
-                          groupCourse === g.name ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'
+                          groupCourse === g.name ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                         }`}>
                         <span>
                           <span className="block font-semibold text-gray-900">{g.name}</span>
@@ -393,7 +393,7 @@ export default function BookingSection() {
                             </span>
                           )}
                         </span>
-                        <span className="font-bold text-indigo-600 whitespace-nowrap">{money(g.fee)}</span>
+                        <span className="font-bold text-brand-600 whitespace-nowrap">{money(g.fee)}</span>
                       </button>
                     ))}
                     {bookableGroup.length === 0 && (
@@ -407,7 +407,7 @@ export default function BookingSection() {
 
                 <div className="mt-8 flex justify-end pt-4 border-t border-gray-100">
                   <button type="button" onClick={() => setStep(2)} disabled={!step1Done}
-                    className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
+                    className="px-8 py-3 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
                     Continue <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -433,7 +433,7 @@ export default function BookingSection() {
                           <button key={t.name} type="button"
                             onClick={() => { setTeacherName(t.name); setSlotIdxs([]); }}
                             className={`text-left p-4 rounded-xl border transition-colors ${
-                              teacherName === t.name ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'
+                              teacherName === t.name ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                             }`}>
                             <div className="font-semibold text-gray-900">{t.name}</div>
                             <div className="text-xs text-gray-600 mt-1 leading-relaxed">{t.blurb}</div>
@@ -461,11 +461,11 @@ export default function BookingSection() {
                             <button key={`${s.day}-${s.times}-${i}`} type="button" onClick={() => toggleSlot(i)}
                               className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
                                 slotIdxs.includes(i)
-                                  ? 'border-indigo-600 bg-indigo-600 text-white'
-                                  : 'border-gray-200 text-gray-700 hover:border-indigo-300'
+                                  ? 'border-brand-600 bg-brand-600 text-white'
+                                  : 'border-gray-200 text-gray-700 hover:border-brand-300'
                               }`}>
                               <span className="font-semibold">{s.day}</span>{' '}
-                              <span className={slotIdxs.includes(i) ? 'text-indigo-100' : 'text-gray-500'}>{s.times}</span>
+                              <span className={slotIdxs.includes(i) ? 'text-brand-100' : 'text-gray-500'}>{s.times}</span>
                               {s.onRequest && <span className="text-xs italic"> (on request)</span>}
                             </button>
                           ))}
@@ -485,7 +485,7 @@ export default function BookingSection() {
                   </div>
                 ) : (
                   <div className="flex-grow flex flex-col items-center justify-center text-center p-8 bg-gray-50 rounded-xl border border-gray-100">
-                    <Users className="w-12 h-12 text-indigo-300 mb-4" />
+                    <Users className="w-12 h-12 text-brand-300 mb-4" />
                     <h5 className="text-lg font-bold text-gray-900 mb-2">{groupCourse}</h5>
                     {groupObj?.schedule && <p className="text-gray-900 font-medium">{groupObj.schedule}</p>}
                     {groupObj?.start_date && (
@@ -506,7 +506,7 @@ export default function BookingSection() {
 
                 <div className="mt-8 flex justify-end pt-4 border-t border-gray-100">
                   <button type="button" onClick={() => setStep(3)} disabled={!step2Done}
-                    className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
+                    className="px-8 py-3 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
                     Continue <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -576,7 +576,7 @@ export default function BookingSection() {
 
                   <div className="pt-4 mt-auto">
                     <button type="submit" disabled={sending}
-                      className="w-full px-6 py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-60 transition-colors shadow-lg shadow-indigo-200 text-lg">
+                      className="w-full px-6 py-4 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 disabled:opacity-60 transition-colors shadow-lg shadow-brand-200 text-lg">
                       {sending ? 'Making your receipt…' : 'Get my receipt'}
                     </button>
                     <p className="text-xs text-center text-gray-500 mt-3">
@@ -664,26 +664,26 @@ export default function BookingSection() {
                   <div className="flex flex-wrap gap-3 mt-6">
                     {!isLive && (
                       <a href={registrationLink(issued)} target="_blank" rel="noopener noreferrer"
-                        className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                        className="px-5 py-3 bg-brand-600 text-white rounded-xl font-semibold hover:bg-brand-700 transition-colors flex items-center gap-2">
                         Finish on the registration form <ExternalLink className="w-4 h-4" />
                       </a>
                     )}
                     <button type="button" onClick={() => window.print()}
-                      className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-indigo-400 transition-colors flex items-center gap-2">
+                      className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-brand-400 transition-colors flex items-center gap-2">
                       <Printer className="w-4 h-4" /> Print or save as PDF
                     </button>
                     <a href={mailtoLink(issued)}
-                      className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-indigo-400 transition-colors">
+                      className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-brand-400 transition-colors">
                       Email it to us
                     </a>
                     {messagingLinks(issued).map(link => (
                       <a key={link.label} href={link.href} target="_blank" rel="noopener noreferrer"
-                        className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-indigo-400 transition-colors">
+                        className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-brand-400 transition-colors">
                         {link.label}
                       </a>
                     ))}
                     <button type="button" onClick={copyReceipt}
-                      className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-indigo-400 transition-colors flex items-center gap-2">
+                      className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-brand-400 transition-colors flex items-center gap-2">
                       {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       {copied ? 'Copied' : 'Copy details'}
                     </button>
