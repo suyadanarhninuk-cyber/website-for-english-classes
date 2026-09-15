@@ -46,6 +46,12 @@ export const site = {
   timezoneLabel: "Myanmar Time (MMT)",
   location: "Yangon, Myanmar",
 
+  // ── Your logo ────────────────────────────────────────────────────
+  // The image files live in the "public" folder. To change your logo,
+  // upload a new image over the old one keeping the same file name.
+  logoMark: "./logo-mark.png",   // the square badge, used in the header
+  logoFull: "./logo-full.png",   // logo with the name, printed on receipts
+
   // ── Contact details ──────────────────────────────────────────────
   email: "support@effortlesseducation.com",
   phone: "+95 9 959 887 855",
