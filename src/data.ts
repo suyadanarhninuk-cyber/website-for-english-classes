@@ -52,6 +52,11 @@ export const site = {
   logoMark: "./logo-mark.png",   // the square badge, used in the header
   logoFull: "./logo-full.png",   // logo with the name, printed on receipts
 
+  // ── Your brand colours ───────────────────────────────────────────
+  // Used on the receipt. Taken from your logo.
+  brandColour: "#6d0101",   // deep red
+  brandAccent: "#e8a800",   // gold
+
   // ── Contact details ──────────────────────────────────────────────
   email: "support@effortlesseducation.com",
   phone: "+95 9 959 887 855",

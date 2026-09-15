@@ -12,8 +12,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Availability, Teacher } from './data';
 
-export const SUPABASE_URL = 'https://uyltnxevhhmrmetbwccx.supabase.co';
-export const SUPABASE_ANON_KEY = 'sb_publishable_qR9NS9sRvzaccLqymt_08A_guOScd7O'; // the long "anon public" key
+export const SUPABASE_URL = '';       // e.g. https://abcdefgh.supabase.co
+export const SUPABASE_ANON_KEY = '';  // the long "anon public" key
 
 export const isLive = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
@@ -187,3 +187,110 @@ export const setReviewStatus = (id: string, status: 'pending' | 'approved') =>
 
 export const deleteReview = (id: string) =>
   supabase!.from('reviews').delete().eq('id', id);
+
+/* ── enrolments ────────────────────────────────────────────────────── */
+
+export interface EnrolmentRow {
+  id: string;
+  reference: string;
+  token: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email: string;
+  telegram: string;
+  facebook: string;
+  notes: string;
+  booking_type: string;
+  course: string;
+  hours: number | null;
+  teacher: string;
+  slots: string[];
+  start_date: string | null;
+  fee: number;
+  payment_method: string;
+  payment_last6: string;
+  payment_file: string;
+  status: 'awaiting_payment' | 'checking' | 'confirmed' | 'rejected';
+  admin_note: string;
+  created_at: string;
+  paid_at: string | null;
+  confirmed_at: string | null;
+}
+
+/** Saves the booking. The student never reads this table back — they
+ *  come back through their private link instead. */
+export async function createEnrolment(row: {
+  reference: string; token: string;
+  first_name: string; last_name: string; phone: string; email: string;
+  telegram: string; facebook: string; notes: string;
+  booking_type: string; course: string; hours: number | null;
+  teacher: string; slots: string[]; start_date: string | null; fee: number;
+  payment_method: string; payment_last6: string; payment_file: string;
+  status: 'awaiting_payment' | 'checking';
+}) {
+  if (!supabase) return { ok: false, message: 'Bookings are not connected yet.' };
+  const { error } = await supabase.from('enrolments').insert(row);
+  return error ? { ok: false, message: error.message } : { ok: true, message: '' };
+}
+
+/** Puts the payment screenshot in the private bucket and returns where
+ *  it was put. Only you can open it afterwards. */
+export async function uploadPaymentFile(token: string, file: File) {
+  if (!supabase) return { ok: false, path: '', message: 'Not connected.' };
+  const clean = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_').slice(-60);
+  const path = `${token}/${Date.now()}-${clean}`;
+  const { error } = await supabase.storage.from('payments').upload(path, file, {
+    cacheControl: '3600', upsert: false,
+  });
+  return error
+    ? { ok: false, path: '', message: error.message }
+    : { ok: true, path, message: '' };
+}
+
+/** The student's private link. Answers only if the token is right. */
+export async function getEnrolment(token: string) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc('get_enrolment', { p_token: token });
+  if (error || !data || (data as unknown[]).length === 0) return null;
+  return (data as Partial<EnrolmentRow>[])[0];
+}
+
+/** Used when a student books first and pays afterwards. */
+export async function attachPayment(
+  token: string, method: string, last6: string, file: string,
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('attach_payment', {
+    p_token: token, p_method: method, p_last6: last6, p_file: file,
+  });
+  if (error) return { ok: false, message: error.message };
+  if (!data) return { ok: false, message: 'This booking has already been dealt with.' };
+  return { ok: true, message: '' };
+}
+
+/* admin side */
+
+export async function adminLoadEnrolments() {
+  if (!supabase) return [];
+  const { data } = await supabase.from('enrolments').select('*')
+    .order('created_at', { ascending: false }).limit(300);
+  return (data ?? []) as EnrolmentRow[];
+}
+
+export async function screenshotUrl(path: string) {
+  if (!supabase || !path) return '';
+  const { data } = await supabase.storage.from('payments').createSignedUrl(path, 3600);
+  return data?.signedUrl ?? '';
+}
+
+export function setEnrolmentStatus(
+  id: string, status: EnrolmentRow['status'], adminNote = '',
+) {
+  const patch: Record<string, unknown> = { status, admin_note: adminNote };
+  if (status === 'confirmed') patch.confirmed_at = new Date().toISOString();
+  return supabase!.from('enrolments').update(patch).eq('id', id);
+}
+
+export const deleteEnrolment = (id: string) =>
+  supabase!.from('enrolments').delete().eq('id', id);

@@ -6,9 +6,21 @@
 
 import { site, payment, forms, receipt, Teacher, Availability } from './data';
 
+export type EnrolmentStatus =
+  | 'awaiting_payment'   // booked, nothing transferred yet
+  | 'checking'           // screenshot sent, you have not checked it yet
+  | 'confirmed'          // you confirmed the money arrived — this is a real receipt
+  | 'rejected';          // something was wrong with the payment
+
 export interface Enrolment {
   reference: string;
-  issuedAt: string;          // ISO timestamp, set when the receipt is made
+  token?: string;            // the secret in the student's private link
+  issuedAt: string;          // ISO timestamp, set when the booking is made
+  status?: EnrolmentStatus;
+  paymentMethod?: string;
+  paymentLast6?: string;
+  paidAt?: string | null;
+  confirmedAt?: string | null;
 
   firstName: string;
   lastName: string;
@@ -73,6 +85,26 @@ export const fullName = (e: Enrolment) =>
 export const paymentRule = (e: Enrolment) =>
   e.bookingType === 'One-to-One' ? payment.oneToOneRule : payment.groupRule;
 
+export const statusText = (e: Enrolment): string => {
+  switch (e.status) {
+    case 'confirmed': return 'PAID — place confirmed';
+    case 'checking':  return 'Payment sent — we are checking it';
+    case 'rejected':  return 'Payment could not be matched — please contact us';
+    default:          return 'Awaiting payment';
+  }
+};
+
+/** A long random string for the student's private link. Not guessable. */
+export function makeToken(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(36).padStart(2, '0')).join('').slice(0, 40);
+}
+
+/** The address a student uses to come back to their booking. */
+export const receiptLink = (token: string) =>
+  `${window.location.origin}${window.location.pathname}#receipt/${token}`;
+
 /* ── the receipt as plain text ─────────────────────────────────────── */
 
 /** Everything on the printed receipt, as text — used for the email, the
@@ -116,11 +148,10 @@ export function receiptText(e: Enrolment): string {
 
   if (e.notes) lines.push(``, `NOTES`, e.notes);
 
-  lines.push(
-    ``,
-    `Status: awaiting payment`,
-    `Teacher confirmation: ______________________  Date: ____________`,
-  );
+  lines.push(``, `Status: ${statusText(e)}`);
+  if (e.status !== 'confirmed') {
+    lines.push(`Teacher confirmation: ______________________  Date: ____________`);
+  }
 
   return lines.join('\n');
 }
