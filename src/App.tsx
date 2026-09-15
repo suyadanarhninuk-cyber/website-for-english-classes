@@ -44,7 +44,7 @@ export default function App() {
 
   return (
     <ContentProvider>
-      <div className="min-h-screen bg-white selection:bg-indigo-100 selection:text-indigo-900 font-sans">
+      <div className="min-h-screen bg-white selection:bg-brand-100 selection:text-brand-900 font-sans">
         <Header />
         <main>
           <Hero />

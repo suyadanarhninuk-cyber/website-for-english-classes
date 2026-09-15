@@ -1,9 +1,46 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════
+   BRAND — colours taken from the Effortless Education logo
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* Typefaces. Fraunces for headings, Plus Jakarta Sans for everything
+     else, Noto Sans Myanmar so Burmese text renders properly. */
+  --font-sans: "Plus Jakarta Sans", "Noto Sans Myanmar", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Fraunces", "Noto Sans Myanmar", Georgia, serif;
+
+  /* Deep red from the logo. brand-600 is the logo colour itself. */
+  --color-brand-50:  #fdf3f2;
+  --color-brand-100: #fbe3e2;
+  --color-brand-200: #f5c6c3;
+  --color-brand-300: #e79b96;
+  --color-brand-400: #d16a63;
+  --color-brand-500: #a83a33;
+  --color-brand-600: #6d0101;
+  --color-brand-700: #560101;
+  --color-brand-800: #3f0101;
+  --color-brand-900: #2b0000;
+
+  /* Gold from the star and the graduation cap. */
+  --color-gold-100: #fdf2d4;
+  --color-gold-200: #fae3a4;
+  --color-gold-300: #f5cf63;
+  --color-gold-400: #efbc2e;
+  --color-gold-500: #e8a800;
+  --color-gold-600: #b98600;
+}
+
+/* Headings use the display face everywhere, including the admin page. */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+}
+
 /* ── Printing ──────────────────────────────────────────────────────────
-   When a student prints the page, only the receipt should come out:
-   no menu, no pricing, no footer. Anything carrying the class
-   "no-print" disappears, and the receipt is left on a clean A4 page. */
+   When a student prints, only the receipt should come out: no menu, no
+   pricing, no footer. Anything with "no-print" disappears. */
 
 @media print {
   .no-print,
@@ -19,8 +56,6 @@
     max-width: 100%;
   }
 
-  /* Keep the signature blocks and the teacher slip from splitting
-     across two pages. */
   #receipt-document section,
   #receipt-document article {
     break-inside: avoid;
