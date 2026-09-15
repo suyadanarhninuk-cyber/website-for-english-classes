@@ -12,9 +12,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Availability, Teacher } from './data';
 
-export const SUPABASE_URL = '';       // e.g. https://abcdefgh.supabase.co
-export const SUPABASE_ANON_KEY = '';  // the long "anon public" key
-
+export const SUPABASE_URL = 'https://uyltnxevhhmrmetbwccx.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_qR9NS9sRvzaccLqymt_08A_guOScd7O'; // the long "anon public" key
 export const isLive = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 export const supabase: SupabaseClient | null = isLive
