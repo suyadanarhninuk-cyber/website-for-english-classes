@@ -4,6 +4,7 @@ import { Star, Quote, CheckCircle2 } from 'lucide-react';
 import { reviewsNote, forms, site } from '../data';
 import { useContent } from '../content';
 import { isLive, sendReview } from '../supabase';
+import { notify } from '../notify';
 
 function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
@@ -62,7 +63,18 @@ function ReviewForm() {
     setError('');
     const res = await sendReview({ quote: quote.trim(), name: name.trim(), course: course.trim(), rating });
     setSending(false);
-    if (res.ok) setSent(true); else setError(res.message);
+    if (res.ok) {
+      setSent(true);
+      notify(`New review from ${name.trim()} — waiting for approval`, {
+        student: name.trim(),
+        course: course.trim(),
+        rating: `${rating} out of 5`,
+        review: quote.trim(),
+        action: 'Approve it in your admin page, Reviews tab.',
+      });
+    } else {
+      setError(res.message);
+    }
   };
 
   return (
