@@ -3,7 +3,10 @@ import { site } from '../data';
 
 export default function Footer() {
   const socials = [
-    site.facebook && { label: 'Facebook', href: site.facebook },
+    site.facebook && {
+      label: site.facebookName ? `${site.facebookName} on Facebook` : 'Facebook',
+      href: site.facebook,
+    },
     site.instagram && { label: 'Instagram', href: site.instagram },
   ].filter(Boolean) as { label: string; href: string }[];
 
@@ -43,6 +46,13 @@ export default function Footer() {
                 <li>
                   <a href={`tel:${site.phone.replace(/\s+/g, '')}`} className="text-gray-400 hover:text-brand-400 transition-colors">
                     {site.phone}
+                  </a>
+                </li>
+              )}
+              {site.facebook && (
+                <li>
+                  <a href={site.facebook} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-brand-400 transition-colors">
+                    Find us on Facebook: {site.facebookName || site.name}
                   </a>
                 </li>
               )}
