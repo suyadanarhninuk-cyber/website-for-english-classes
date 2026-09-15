@@ -77,6 +77,10 @@ export const site = {
   // CHECK THIS: the id below should be your Facebook PAGE, not your
   // personal account. Swap it if I have them the wrong way round.
   facebook: "https://www.facebook.com/profile.php?id=100063772011423",
+  // The name students will see and can search for on Facebook. If you
+  // claim a short username on your page (facebook.com/yourname), paste
+  // that address into "facebook" above instead of the long id one.
+  facebookName: "Effortless English",
   instagram: "",
 
   // ── Email alerts to your Gmail ───────────────────────────────────
