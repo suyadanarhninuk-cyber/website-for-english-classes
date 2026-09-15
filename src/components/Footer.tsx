@@ -1,5 +1,4 @@
 import React from 'react';
-import { BookOpen } from 'lucide-react';
 import { site } from '../data';
 
 export default function Footer() {
@@ -14,9 +13,7 @@ export default function Footer() {
         <div className="grid md:grid-cols-4 gap-8 mb-12">
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
-                <BookOpen className="w-6 h-6" />
-              </div>
+              <img src={site.logoMark} alt="" className="w-11 h-11 rounded-xl object-cover" />
               <span className="text-2xl font-bold text-white tracking-tight">{site.name}</span>
             </div>
             <p className="text-gray-400 max-w-sm mb-6 leading-relaxed">{site.heroSubtitle}</p>

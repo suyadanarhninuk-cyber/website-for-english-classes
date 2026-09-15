@@ -1,5 +1,4 @@
 import React from 'react';
-import { BookOpen } from 'lucide-react';
 import { motion } from 'motion/react';
 import { site } from '../data';
 
@@ -12,9 +11,7 @@ export default function Header() {
           animate={{ opacity: 1, x: 0 }}
           className="flex items-center gap-3 cursor-pointer"
         >
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
-            <BookOpen className="w-6 h-6" />
-          </div>
+          <img src={site.logoMark} alt="" className="w-11 h-11 rounded-xl object-cover shadow-sm" />
           <span className="text-xl font-bold text-gray-900 tracking-tight">{site.name}</span>
         </motion.div>
         
