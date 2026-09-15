@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* ── Printing ──────────────────────────────────────────────────────────
+   When a student prints the page, only the receipt should come out:
+   no menu, no pricing, no footer. Anything carrying the class
+   "no-print" disappears, and the receipt is left on a clean A4 page. */
+
+@media print {
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  #receipt-document {
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100%;
+  }
+
+  /* Keep the signature blocks and the teacher slip from splitting
+     across two pages. */
+  #receipt-document section,
+  #receipt-document article {
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+}
+
+@page {
+  size: A4;
+  margin: 14mm;
+}
