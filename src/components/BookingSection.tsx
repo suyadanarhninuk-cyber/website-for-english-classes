@@ -597,9 +597,7 @@ export default function BookingSection() {
                 <p className="text-sm text-gray-600 mb-6">
                   Your reference is{' '}
                   <span className="font-mono font-semibold text-gray-900">{issued.reference}</span>.
-                  {issued.bookingType === 'One-to-One'
-                    ? ' If you would rather wait until we confirm your teacher and times, choose “book now, pay later”.'
-                    : ' Transfer the fee, then send us the screenshot.'}
+                  {' Transfer the fee, then send us the screenshot so we can confirm your place.'}
                 </p>
 
                 <PaymentPanel
@@ -607,8 +605,6 @@ export default function BookingSection() {
                   reference={issued.reference}
                   busy={sending}
                   onSend={d => saveBooking(d)}
-                  onSkip={() => saveBooking(null)}
-                  skipLabel="Book now, pay later"
                 />
 
                 {saveError && (
