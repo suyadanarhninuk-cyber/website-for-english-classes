@@ -58,7 +58,7 @@ export const site = {
   brandAccent: "#e8a800",   // gold
 
   // ── Contact details ──────────────────────────────────────────────
-  email: "support@effortlesseducation.com",
+  email: "support@effortlesseducation.uk",
   phone: "+95 9 959 887 855",
 
   // ── Messaging links ──────────────────────────────────────────────
