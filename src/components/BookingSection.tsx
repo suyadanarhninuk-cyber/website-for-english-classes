@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  CheckCircle2, ChevronRight, Clock, Copy, Check, Printer, User, Users, ExternalLink,
+  CheckCircle2, ChevronRight, Clock, Copy, Check, Printer, User, Users, ExternalLink, Link2,
 } from 'lucide-react';
 import { oneToOneLevels, site, payment } from '../data';
 import { monthLabel, thisMonth, useContent } from '../content';
@@ -12,12 +12,16 @@ import {
   expandSlots,
   mailtoLink,
   makeReference,
+  makeToken,
   messagingLinks,
   money,
+  receiptLink,
   registrationLink,
   slotLabel,
 } from '../contact';
+import { createEnrolment, isLive, uploadPaymentFile } from '../supabase';
 import Receipt from './Receipt';
+import PaymentPanel, { PaymentDetails } from './PaymentPanel';
 
 type BookingMode = 'one-to-one' | 'group' | null;
 
@@ -44,6 +48,8 @@ export default function BookingSection() {
   const [sending, setSending] = useState(false);
   const [issued, setIssued] = useState<Enrolment | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   /* The group courses on offer: this month's batch when the database is
      driving things, otherwise everything in src/data.ts. */
@@ -146,11 +152,87 @@ export default function BookingSection() {
       fee,
     };
 
-    setSending(true);
-    await deliverEnrolment(enrolment);   // emails you a copy if Formspree is set up
-    setSending(false);
+    if (!isLive) {
+      setSending(true);
+      await deliverEnrolment(enrolment);   // emails you a copy if Formspree is set up
+      setSending(false);
+      setIssued(enrolment);
+      setStep(4);
+      return;
+    }
+
+    enrolment.token = makeToken();
+    enrolment.status = 'awaiting_payment';
     setIssued(enrolment);
+    setSaveError('');
     setStep(4);
+  };
+
+  /** Saves the booking. Called whether they pay now or pay later. */
+  const saveBooking = async (details: PaymentDetails | null) => {
+    if (!issued?.token) return;
+    setSending(true);
+    setSaveError('');
+
+    let filePath = '';
+    if (details?.file) {
+      const up = await uploadPaymentFile(issued.token, details.file);
+      if (!up.ok) {
+        setSending(false);
+        setSaveError(`Your screenshot would not upload: ${up.message}`);
+        return;
+      }
+      filePath = up.path;
+    }
+
+    const status = details ? 'checking' : 'awaiting_payment';
+    const res = await createEnrolment({
+      reference: issued.reference,
+      token: issued.token,
+      first_name: issued.firstName,
+      last_name: issued.lastName,
+      phone: issued.phone,
+      email: issued.email,
+      telegram: issued.telegram,
+      facebook: issued.facebook,
+      notes: issued.notes,
+      booking_type: issued.bookingType,
+      course: issued.course,
+      hours: issued.hours,
+      teacher: issued.teacher,
+      slots: issued.slots,
+      start_date: issued.startDate || null,
+      fee: issued.fee,
+      payment_method: details?.method ?? '',
+      payment_last6: details?.last6 ?? '',
+      payment_file: filePath,
+      status,
+    });
+
+    setSending(false);
+    if (!res.ok) { setSaveError(res.message); return; }
+
+    const saved: Enrolment = {
+      ...issued,
+      status,
+      paymentMethod: details?.method ?? '',
+      paymentLast6: details?.last6 ?? '',
+      paidAt: details ? new Date().toISOString() : null,
+    };
+    setIssued(saved);
+    deliverEnrolment(saved);   // emails you a copy too, if Formspree is set up
+    setStep(5);
+  };
+
+  const copyLink = async () => {
+    if (!issued?.token) return;
+    try {
+      await navigator.clipboard.writeText(receiptLink(issued.token));
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      setCopiedLink(false);
+    }
   };
 
   const copyReceipt = async () => {
@@ -166,6 +248,7 @@ export default function BookingSection() {
 
   const startOver = () => {
     setIssued(null);
+    setSaveError('');
     setStep(1);
     setMode(null);
     setLevelId(''); setTeacherName(''); setGroupCourse('');
@@ -174,7 +257,10 @@ export default function BookingSection() {
     setTelegram(''); setFacebook(''); setNotes('');
   };
 
-  const stepLabels = ['Course', 'Teacher & times', 'Your details', 'Receipt'];
+  const stepLabels = isLive
+    ? ['Course', 'Teacher & times', 'Your details', 'Payment', 'Done']
+    : ['Course', 'Teacher & times', 'Your details', 'Receipt'];
+  const lastStep = isLive ? 5 : 4;
   const field =
     'w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all';
 
@@ -219,7 +305,12 @@ export default function BookingSection() {
                           ? 'Fixed group timetable'
                           : teacherName || 'Pick a teacher and times')}
                         {n === 3 && (firstName ? `${firstName} ${lastName}`.trim() : 'Name and contact')}
-                        {n === 4 && (issued ? issued.reference : 'Print it or send it to us')}
+                        {n === 4 && (isLive
+                          ? (issued ? `${money(issued.fee)} · ${issued.reference}` : 'Transfer and upload')
+                          : (issued ? issued.reference : 'Print it or send it to us'))}
+                        {n === 5 && (issued?.status === 'checking'
+                          ? 'We are checking your payment'
+                          : 'Keep your reference')}
                       </div>
                     </div>
                   </div>
@@ -496,30 +587,91 @@ export default function BookingSection() {
               </motion.div>
             )}
 
-            {/* STEP 4 — the receipt */}
-            {step === 4 && issued && (
+            {/* STEP 4 — pay (only when the database is connected) */}
+            {step === 4 && issued && isLive && (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="h-full flex flex-col">
+                <div className="flex items-center gap-4 mb-2">
+                  <button type="button" onClick={() => setStep(3)} className="text-sm font-medium text-gray-500 hover:text-gray-900">Back</button>
+                  <h4 className="text-2xl font-bold text-gray-900">Payment</h4>
+                </div>
+                <p className="text-sm text-gray-600 mb-6">
+                  Your reference is{' '}
+                  <span className="font-mono font-semibold text-gray-900">{issued.reference}</span>.
+                  {issued.bookingType === 'One-to-One'
+                    ? ' If you would rather wait until we confirm your teacher and times, choose “book now, pay later”.'
+                    : ' Transfer the fee, then send us the screenshot.'}
+                </p>
+
+                <PaymentPanel
+                  fee={issued.fee}
+                  reference={issued.reference}
+                  busy={sending}
+                  onSend={d => saveBooking(d)}
+                  onSkip={() => saveBooking(null)}
+                  skipLabel="Book now, pay later"
+                />
+
+                {saveError && (
+                  <p className="mt-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                    {saveError}
+                  </p>
+                )}
+              </motion.div>
+            )}
+
+            {/* FINAL STEP — the document */}
+            {step === lastStep && issued && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="h-full flex flex-col">
                 <div className="no-print">
                   <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-5">
                     <CheckCircle2 className="w-7 h-7" />
                   </div>
                   <h4 className="text-2xl font-bold text-gray-900 mb-2">
-                    Your receipt is ready, {issued.firstName}.
+                    {issued.status === 'checking'
+                      ? `Got it, ${issued.firstName}.`
+                      : `You are booked, ${issued.firstName}.`}
                   </h4>
-                  <p className="text-gray-600 mb-6">
-                    Your reference is <span className="font-mono font-semibold text-gray-900">{issued.reference}</span>.
-                    Print it or save it, then finish on the registration form so we have your payment screenshot.
+                  <p className="text-gray-600 mb-4">
+                    Your reference is <span className="font-mono font-semibold text-gray-900">{issued.reference}</span>.{' '}
+                    {!isLive && 'Print it or save it, then finish on the registration form so we have your payment screenshot.'}
+                    {isLive && issued.status === 'checking' &&
+                      'We will check your transfer and confirm your place on Telegram. Your receipt appears on the link below as soon as we do.'}
+                    {isLive && issued.status === 'awaiting_payment' &&
+                      'When you are ready to pay, come back through the link below and upload your screenshot.'}
                   </p>
+
+                  {isLive && issued.token && (
+                    <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-200">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-1">
+                        <Link2 className="w-4 h-4" /> Your private link — keep it
+                      </div>
+                      <p className="text-xs text-gray-600 mb-3">
+                        Save this. It shows your booking, and turns into your receipt once we confirm payment.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="text-xs bg-white border border-gray-200 rounded px-2 py-1.5 break-all flex-1 min-w-0">
+                          {receiptLink(issued.token)}
+                        </code>
+                        <button type="button" onClick={copyLink}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                          style={{ backgroundColor: site.brandColour }}>
+                          {copiedLink ? 'Copied' : 'Copy link'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <Receipt enrolment={issued} />
 
                 <div className="no-print">
                   <div className="flex flex-wrap gap-3 mt-6">
-                    <a href={registrationLink(issued)} target="_blank" rel="noopener noreferrer"
-                      className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2">
-                      Finish on the registration form <ExternalLink className="w-4 h-4" />
-                    </a>
+                    {!isLive && (
+                      <a href={registrationLink(issued)} target="_blank" rel="noopener noreferrer"
+                        className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                        Finish on the registration form <ExternalLink className="w-4 h-4" />
+                      </a>
+                    )}
                     <button type="button" onClick={() => window.print()}
                       className="px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-xl font-semibold hover:border-indigo-400 transition-colors flex items-center gap-2">
                       <Printer className="w-4 h-4" /> Print or save as PDF

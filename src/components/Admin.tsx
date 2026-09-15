@@ -3,11 +3,13 @@ import {
   Check, ChevronLeft, Loader2, LogOut, Plus, RefreshCw, Trash2, X,
 } from 'lucide-react';
 import {
-  GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
-  adminLoadAll, deleteGroupClass, deleteReview, deleteSubmission, deleteTeacher,
-  isLive, markSubmissionHandled, saveGroupClass, saveTeacher, setReviewStatus,
+  EnrolmentRow, GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
+  adminLoadAll, adminLoadEnrolments, deleteEnrolment, deleteGroupClass, deleteReview,
+  deleteSubmission, deleteTeacher, isLive, markSubmissionHandled, saveGroupClass,
+  saveTeacher, screenshotUrl, setEnrolmentStatus, setReviewStatus,
   signIn, signOut, supabase,
 } from '../supabase';
+import { money, receiptLink } from '../contact';
 import { oneToOneLevels, site } from '../data';
 import { monthLabel, thisMonth } from '../content';
 import { Availability } from '../data';
@@ -18,7 +20,7 @@ import { Availability } from '../data';
    database are what enforce that — not this page. Even if someone opened
    this screen, without your login the database refuses every change. */
 
-type Tab = 'classes' | 'teachers' | 'reviews';
+type Tab = 'enrolments' | 'classes' | 'teachers' | 'reviews';
 
 const input =
   'w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none';
@@ -52,7 +54,8 @@ export default function Admin() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const [tab, setTab] = useState<Tab>('classes');
+  const [tab, setTab] = useState<Tab>('enrolments');
+  const [enrolments, setEnrolments] = useState<EnrolmentRow[]>([]);
   const [month, setMonth] = useState(thisMonth());
   const [classes, setClasses] = useState<GroupClassRow[]>([]);
   const [teacherRows, setTeacherRows] = useState<TeacherRow[]>([]);
@@ -74,7 +77,8 @@ export default function Admin() {
 
   const refresh = async () => {
     setBusy(true);
-    const data = await adminLoadAll();
+    const [data, bookings] = await Promise.all([adminLoadAll(), adminLoadEnrolments()]);
+    setEnrolments(bookings);
     setBusy(false);
     if (!data) return;
     setClasses(data.groupClasses);
@@ -251,7 +255,22 @@ export default function Admin() {
   const pendingReviews = reviewRows.filter(r => r.status === 'pending');
   const approvedReviews = reviewRows.filter(r => r.status === 'approved');
 
+  const waitingPayments = enrolments.filter(e => e.status === 'checking');
+
+  const confirmPayment = async (e: EnrolmentRow) => {
+    await setEnrolmentStatus(e.id, 'confirmed');
+    await refresh();
+    flash(`${e.first_name}'s receipt is now marked PAID. Send them their link.`);
+  };
+
+  const rejectPayment = async (e: EnrolmentRow) => {
+    const why = prompt('What was wrong? (only you see this)') ?? '';
+    await setEnrolmentStatus(e.id, 'rejected', why);
+    await refresh();
+  };
+
   const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: 'enrolments', label: 'Enrolments', count: waitingPayments.length },
     { id: 'classes', label: 'Group classes' },
     { id: 'teachers', label: 'Teachers', count: waiting.length },
     { id: 'reviews', label: 'Reviews', count: pendingReviews.length },
@@ -294,6 +313,34 @@ export default function Admin() {
       )}
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+        {/* ENROLMENTS */}
+        {tab === 'enrolments' && (
+          <section className="bg-white rounded-2xl border border-gray-200 p-5">
+            <h2 className="font-bold text-gray-900 mb-1">Student bookings</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              Check the transfer, then press <strong>Confirm payment</strong>. That turns the
+              student's link into a receipt marked PAID, which they can print themselves.
+            </p>
+
+            {enrolments.length === 0 && (
+              <p className="text-sm text-gray-500 py-8 text-center">No bookings yet.</p>
+            )}
+
+            <div className="space-y-3">
+              {enrolments.map(e => (
+                <EnrolmentCard key={e.id} row={e}
+                  onConfirm={() => confirmPayment(e)}
+                  onReject={() => rejectPayment(e)}
+                  onDelete={async () => {
+                    if (confirm(`Delete ${e.first_name}'s booking ${e.reference}?`)) {
+                      await deleteEnrolment(e.id); refresh();
+                    }
+                  }} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* GROUP CLASSES */}
         {tab === 'classes' && (
@@ -561,6 +608,113 @@ export default function Admin() {
 }
 
 /* ── small pieces ──────────────────────────────────────────────────── */
+
+const statusStyle: Record<EnrolmentRow['status'], string> = {
+  awaiting_payment: 'bg-gray-100 text-gray-700',
+  checking: 'bg-amber-100 text-amber-900',
+  confirmed: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+};
+
+const statusWord: Record<EnrolmentRow['status'], string> = {
+  awaiting_payment: 'Not paid yet',
+  checking: 'Check this payment',
+  confirmed: 'Paid',
+  rejected: 'Rejected',
+};
+
+function EnrolmentCard({
+  row, onConfirm, onReject, onDelete,
+}: {
+  row: EnrolmentRow;
+  onConfirm: () => void;
+  onReject: () => void;
+  onDelete: () => void;
+}) {
+  const [shot, setShot] = useState('');
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const viewScreenshot = async () => {
+    if (!shot) setShot(await screenshotUrl(row.payment_file));
+    setOpen(o => !o);
+  };
+
+  /* The student's private link — paste it to them on Telegram. */
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(receiptLink(row.token));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className={`p-4 rounded-xl border ${
+      row.status === 'checking' ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'
+    }`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold text-gray-900">
+            {row.first_name} {row.last_name}
+            <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold ${statusStyle[row.status]}`}>
+              {statusWord[row.status]}
+            </span>
+          </div>
+          <div className="font-mono text-xs text-gray-500 mt-1">{row.reference}</div>
+        </div>
+        <div className="text-right">
+          <div className="font-bold text-gray-900">{money(row.fee)}</div>
+          <div className="text-xs text-gray-500">
+            {new Date(row.created_at).toLocaleDateString('en-GB')}
+          </div>
+        </div>
+      </div>
+
+      <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm mt-3">
+        <Row label="Course" value={`${row.booking_type} · ${row.course}`} />
+        <Row label="Teacher" value={row.teacher} />
+        <Row label="Times" value={(row.slots ?? []).join(' · ')} />
+        <Row label="Start" value={row.start_date ?? ''} />
+        <Row label="Phone" value={row.phone} />
+        <Row label="Telegram" value={row.telegram} />
+        <Row label="Email" value={row.email} />
+        <Row label="Paid by" value={[row.payment_method, row.payment_last6].filter(Boolean).join(' · ')} />
+      </dl>
+
+      {row.notes && <p className="text-sm text-gray-700 mt-3">{row.notes}</p>}
+      {row.admin_note && (
+        <p className="text-xs text-red-700 mt-2">Your note: {row.admin_note}</p>
+      )}
+
+      {open && shot && (
+        <div className="mt-3">
+          <img src={shot} alt="Payment screenshot" className="max-h-96 rounded-lg border border-gray-300" />
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 mt-4">
+        {row.payment_file && (
+          <button onClick={viewScreenshot} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+            {open ? 'Hide screenshot' : 'View screenshot'}
+          </button>
+        )}
+        {row.status !== 'confirmed' && (
+          <button onClick={onConfirm} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2`}>
+            <Check className="w-4 h-4" /> Confirm payment
+          </button>
+        )}
+        {row.status === 'checking' && (
+          <button onClick={onReject} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+            Cannot match it
+          </button>
+        )}
+        <button onClick={copyLink} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+          {copied ? 'Copied' : 'Copy their link'}
+        </button>
+        <button onClick={onDelete} className={`${btn} text-red-600 hover:bg-red-50 ml-auto`}>Delete</button>
+      </div>
+    </div>
+  );
+}
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
