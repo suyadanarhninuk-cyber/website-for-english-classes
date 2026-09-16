@@ -15,12 +15,14 @@ import TeacherPortal from './components/TeacherPortal';
 import Footer from './components/Footer';
 import Admin from './components/Admin';
 import ReceiptPage from './components/ReceiptPage';
+import TeacherPage from './components/TeacherPage';
 import { ContentProvider } from './content';
 
 /* Three addresses:
      yoursite.com            the website
      yoursite.com/#admin     your admin page
-     yoursite.com/#receipt/… a student's private booking link          */
+     yoursite.com/#receipt/… a student's private booking link
+     yoursite.com/#teacher/… a teacher's private page                   */
 
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash);
@@ -40,6 +42,11 @@ export default function App() {
   if (hash.startsWith('#receipt/')) {
     const token = decodeURIComponent(hash.slice('#receipt/'.length));
     if (token) return <ReceiptPage token={token} />;
+  }
+
+  if (hash.startsWith('#teacher/')) {
+    const token = decodeURIComponent(hash.slice('#teacher/'.length));
+    if (token) return <TeacherPage token={token} />;
   }
 
   return (

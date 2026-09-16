@@ -12,8 +12,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Availability, Teacher } from './data';
 
-export const SUPABASE_URL = 'https://uyltnxevhhmrmetbwccx.supabase.co';
-export const SUPABASE_ANON_KEY = 'sb_publishable_qR9NS9sRvzaccLqymt_08A_guOScd7O'; // the long "anon public" key
+export const SUPABASE_URL = '';       // e.g. https://abcdefgh.supabase.co
+export const SUPABASE_ANON_KEY = '';  // the long "anon public" key
+
 export const isLive = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 export const supabase: SupabaseClient | null = isLive
@@ -38,6 +39,7 @@ export interface GroupClassRow {
 
 export interface TeacherRow {
   id: string;
+  token: string;
   name: string;
   course: 'general' | 'ielts';
   levels: string[];
@@ -59,6 +61,9 @@ export interface SubmissionRow {
   blurb: string;
   availability_text: string;
   fee_request: string;
+  payout_method: string;
+  payout_number: string;
+  payout_name: string;
   handled: boolean;
   created_at: string;
 }
@@ -121,6 +126,9 @@ export async function sendTeacherForm(input: {
   blurb: string;
   availability_text: string;
   fee_request: string;
+  payout_method?: string;
+  payout_number?: string;
+  payout_name?: string;
 }) {
   if (!supabase) return { ok: false, message: 'The teacher form is not connected yet.' };
   const { error } = await supabase.from('teacher_submissions').insert(input);
@@ -293,3 +301,138 @@ export function setEnrolmentStatus(
 
 export const deleteEnrolment = (id: string) =>
   supabase!.from('enrolments').delete().eq('id', id);
+
+/* ── teachers: their private area and their pay ────────────────────── */
+
+export interface PaymentRequest {
+  id: string;
+  period: string;
+  detail: string;
+  amount: number;
+  status: 'requested' | 'paid' | 'rejected';
+  admin_note: string;
+  proof_file: string;
+  created_at: string;
+  paid_at: string | null;
+}
+
+export interface TeacherHome {
+  name: string;
+  status: 'pending' | 'live';
+  course: string;
+  levels: string[];
+  blurb: string;
+  availability: { day: string; times: string; onRequest?: boolean }[];
+  payout_method: string;
+  payout_number: string;
+  payout_name: string;
+  agreed_rate: string;
+  telegram: string;
+  requests: PaymentRequest[];
+}
+
+export interface TeacherPrivateRow {
+  teacher_id: string;
+  phone: string;
+  email: string;
+  telegram: string;
+  payout_method: string;
+  payout_number: string;
+  payout_name: string;
+  agreed_rate: string;
+  note: string;
+}
+
+/** Everything a teacher sees on their own private link. */
+export async function teacherHome(token: string): Promise<TeacherHome | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc('teacher_home', { p_token: token });
+  if (error || !data) return null;
+  return data as TeacherHome;
+}
+
+export async function teacherSubmitHours(token: string, hours: string, note: string) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_submit_hours', {
+    p_token: token, p_hours: hours, p_note: note,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data ? { ok: true, message: '' } : { ok: false, message: 'We could not find your record.' };
+}
+
+export async function teacherRequestPayment(
+  token: string, period: string, detail: string, amount: number,
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_request_payment', {
+    p_token: token, p_period: period, p_detail: detail, p_amount: amount,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data
+    ? { ok: true, message: '' }
+    : { ok: false, message: 'That did not go through. Wait a moment and try again.' };
+}
+
+export async function teacherUpdatePayout(
+  token: string, method: string, number: string, name: string, telegram: string,
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_update_payout', {
+    p_token: token, p_method: method, p_number: number, p_name: name, p_telegram: telegram,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data ? { ok: true, message: '' } : { ok: false, message: 'We could not find your record.' };
+}
+
+/** The public address of a payout screenshot. The file name is random,
+ *  so only someone given the address can open it. */
+export function payoutProofUrl(path: string) {
+  if (!supabase || !path) return '';
+  return supabase.storage.from('payouts').getPublicUrl(path).data.publicUrl;
+}
+
+/* admin side of teacher pay */
+
+export async function adminLoadPayments() {
+  if (!supabase) return { requests: [], teachers: [], privates: [] };
+  const [r, t, p] = await Promise.all([
+    supabase.from('payment_requests').select('*').order('created_at', { ascending: false }).limit(300),
+    supabase.from('teachers').select('id, name, token').order('name'),
+    supabase.from('teacher_private').select('*'),
+  ]);
+  return {
+    requests: (r.data ?? []) as (PaymentRequest & { teacher_id: string })[],
+    teachers: (t.data ?? []) as { id: string; name: string; token: string }[],
+    privates: (p.data ?? []) as TeacherPrivateRow[],
+  };
+}
+
+export async function uploadPayoutProof(requestId: string, file: File) {
+  if (!supabase) return { ok: false, path: '', message: 'Not connected.' };
+  const clean = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_').slice(-50);
+  const path = `${requestId}/${crypto.randomUUID()}-${clean}`;
+  const { error } = await supabase.storage.from('payouts').upload(path, file);
+  return error
+    ? { ok: false, path: '', message: error.message }
+    : { ok: true, path, message: '' };
+}
+
+export function markRequestPaid(id: string, proofFile: string, note = '') {
+  return supabase!.from('payment_requests').update({
+    status: 'paid', proof_file: proofFile, admin_note: note,
+    paid_at: new Date().toISOString(),
+  }).eq('id', id);
+}
+
+export function rejectRequest(id: string, note: string) {
+  return supabase!.from('payment_requests')
+    .update({ status: 'rejected', admin_note: note }).eq('id', id);
+}
+
+export const deleteRequest = (id: string) =>
+  supabase!.from('payment_requests').delete().eq('id', id);
+
+export function saveTeacherPrivate(row: Partial<TeacherPrivateRow> & { teacher_id: string }) {
+  return supabase!.from('teacher_private')
+    .upsert({ ...row, updated_at: new Date().toISOString() });
+}
