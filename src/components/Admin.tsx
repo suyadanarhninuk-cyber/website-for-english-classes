@@ -17,6 +17,7 @@ import {
   saveVideoCourse, teacherPhotoUrl, uploadPayoutProof, voucherProofUrl,
 } from '../supabase';
 import { money, receiptLink } from '../contact';
+import ClassPaste, { ParsedClass } from './ClassPaste';
 
 const teacherLink = (token: string) =>
   `${window.location.origin}${window.location.pathname}#teacher/${token}`;
@@ -208,6 +209,32 @@ export default function Admin() {
     }));
     setClasses(prev2 => [...prev2, ...copies]);
     flash(`Copied ${source.length} classes from ${monthLabel(prev)}. Check the dates, then save.`);
+  };
+
+  /* Classes pasted in as text. Each one is filed under the month of its
+     own start date, so a mixed list sorts itself out. */
+  const addPasted = async (rows: ParsedClass[]) => {
+    setBusy(true);
+    let n = 0;
+    for (const r of rows) {
+      const target = r.month || month;
+      await saveGroupClass({
+        month: target,
+        name: r.name,
+        fee: r.fee,
+        schedule: r.schedule,
+        start_date: r.startDate || null,
+        seats: r.seats,
+        visible: true,
+        sort_order: 50 + n,
+      });
+      n += 1;
+    }
+    await refresh();
+    setBusy(false);
+    const months = Array.from(new Set(rows.map(r => r.month || month))).sort();
+    if (months.length && !months.includes(month)) setMonth(months[0]);
+    flash(`${n} class${n === 1 ? '' : 'es'} added. Check them below before telling students.`);
   };
 
   const saveClasses = async () => {
@@ -430,6 +457,10 @@ export default function Admin() {
               <button onClick={saveClasses} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700 ml-auto`}>
                 {busy ? 'Saving…' : 'Save this month'}
               </button>
+            </div>
+
+            <div className="mb-5">
+              <ClassPaste onAdd={addPasted} busy={busy} />
             </div>
 
             <p className="text-sm text-gray-500 mb-4">
