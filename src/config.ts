@@ -14,5 +14,5 @@
    every security rule and must stay inside Supabase.
    ═══════════════════════════════════════════════════════════════════════ */
 
-export const SUPABASE_URL = '';
-export const SUPABASE_KEY = '';
+export const SUPABASE_URL = 'https://uyltnxevhhmrmetbwccx.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_qR9NS9sRvzaccLqymt_08A_guOScd7O'; // the long "anon public" key
