@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  CheckCircle2, ChevronRight, Clock, Copy, Check, Printer, User, Users, ExternalLink, Link2,
+  CheckCircle2, ChevronRight, Clock, Copy, Check, Printer, PlayCircle, User, Users,
+  ExternalLink, Link2,
 } from 'lucide-react';
 import { oneToOneLevels, site, payment } from '../data';
 import { monthLabel, thisMonth, useContent } from '../content';
@@ -19,14 +20,17 @@ import {
   registrationLink,
   slotLabel,
 } from '../contact';
-import { createEnrolment, isLive, uploadPaymentFile } from '../supabase';
+import {
+  checkVoucher, createEnrolment, isLive, loadVideoCourses, redeemVoucher,
+  teacherPhotoUrl, uploadPaymentFile, VideoCourseRow,
+} from '../supabase';
 import Receipt from './Receipt';
 import PaymentPanel, { PaymentDetails } from './PaymentPanel';
 
-type BookingMode = 'one-to-one' | 'group' | null;
+type BookingMode = 'one-to-one' | 'group' | 'video' | null;
 
 export default function BookingSection() {
-  const { teachers, groupClasses, months } = useContent();
+  const { teachers, groupClasses, months, videoCourses } = useContent();
 
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<BookingMode>(null);
@@ -34,6 +38,12 @@ export default function BookingSection() {
   const [levelId, setLevelId] = useState('');
   const [teacherName, setTeacherName] = useState('');
   const [groupCourse, setGroupCourse] = useState('');
+  const [videoCourse, setVideoCourse] = useState('');
+
+  const [voucher, setVoucher] = useState('');
+  const [voucherPct, setVoucherPct] = useState(0);
+  const [voucherMsg, setVoucherMsg] = useState('');
+  const [checking, setChecking] = useState(false);
   const [slotIdxs, setSlotIdxs] = useState<number[]>([]);
   const [startDate, setStartDate] = useState('');
 
@@ -87,6 +97,7 @@ export default function BookingSection() {
     setLevelId('');
     setTeacherName('');
     setGroupCourse('');
+    setVideoCourse('');
     setSlotIdxs([]);
   };
 
@@ -110,20 +121,45 @@ export default function BookingSection() {
 
   const levelObj = oneToOneLevels.find(l => l.id === levelId);
   const groupObj = bookableGroup.find(g => g.name === groupCourse);
-  const fee = levelObj?.fee ?? groupObj?.fee ?? 0;
+  const videoObj = videoCourses.find(v => v.title === videoCourse);
+
+  const fullFee = levelObj?.fee ?? groupObj?.fee ?? videoObj?.fee ?? 0;
+  const fee = voucherPct
+    ? Math.round((fullFee * (100 - voucherPct)) / 100)
+    : fullFee;
+
+  const applyVoucher = async () => {
+    const code = voucher.trim().toUpperCase();
+    if (!code) { setVoucherPct(0); setVoucherMsg(''); return; }
+    setChecking(true);
+    const res = await checkVoucher(code);
+    setChecking(false);
+    if (res.valid) {
+      setVoucherPct(res.percent ?? 0);
+      setVoucherMsg(`${res.percent}% off applied.`);
+    } else {
+      setVoucherPct(0);
+      setVoucherMsg(res.message || 'That code did not work.');
+    }
+  };
 
   const toggleSlot = (i: number) =>
     setSlotIdxs(prev =>
       prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i].sort((a, b) => a - b),
     );
 
-  const step1Done = mode === 'group' ? !!groupCourse : !!levelId;
+  const step1Done =
+    mode === 'group' ? !!groupCourse
+    : mode === 'video' ? !!videoCourse
+    : !!levelId;
+
   const step2Done =
-    mode === 'group' ? true : !!teacherName && chosenSlots.length > 0 && !!startDate;
+    mode === 'one-to-one' ? !!teacherName && chosenSlots.length > 0 && !!startDate : true;
 
   const selectionLabel = () => {
-    if (!mode) return 'Choose one-to-one or group';
+    if (!mode) return 'One-to-one, group or video';
     if (mode === 'group') return groupCourse || 'Select a group course';
+    if (mode === 'video') return videoCourse || 'Select a video course';
     return levelObj ? levelObj.name : 'Select a level';
   };
 
@@ -141,15 +177,19 @@ export default function BookingSection() {
       telegram: telegram.trim(),
       facebook: facebook.trim(),
       notes: notes.trim(),
-      bookingType: mode === 'group' ? 'Group course' : 'One-to-One',
-      course: mode === 'group' ? groupCourse : levelObj?.name || '',
-      hours: mode === 'group' ? null : levelObj?.hours ?? null,
-      teacher: mode === 'group' ? '' : teacherName,
+      bookingType: mode === 'group' ? 'Group course' : mode === 'video' ? 'Video course' : 'One-to-One',
+      course: mode === 'group' ? groupCourse : mode === 'video' ? videoCourse : levelObj?.name || '',
+      hours: mode === 'one-to-one' ? levelObj?.hours ?? null : null,
+      teacher: mode === 'one-to-one' ? teacherName : '',
       slots: mode === 'group'
         ? (groupObj?.schedule ? [groupObj.schedule] : [])
-        : chosenSlots,
-      startDate: mode === 'group' ? (groupObj?.start_date ?? '') : startDate,
+        : mode === 'video' ? [] : chosenSlots,
+      startDate: mode === 'group' ? (groupObj?.start_date ?? '')
+        : mode === 'video' ? '' : startDate,
       fee,
+      fullFee,
+      voucherCode: voucherPct ? voucher.trim().toUpperCase() : '',
+      discountPercent: voucherPct,
     };
 
     if (!isLive) {
@@ -207,10 +247,15 @@ export default function BookingSection() {
       payment_last6: details?.last6 ?? '',
       payment_file: filePath,
       status,
+      voucher_code: issued.voucherCode ?? '',
+      discount_percent: issued.discountPercent ?? 0,
+      full_fee: issued.fullFee ?? issued.fee,
     });
 
     setSending(false);
     if (!res.ok) { setSaveError(res.message); return; }
+
+    if (issued.voucherCode) await redeemVoucher(issued.voucherCode, issued.reference);
 
     const saved: Enrolment = {
       ...issued,
@@ -251,8 +296,9 @@ export default function BookingSection() {
     setSaveError('');
     setStep(1);
     setMode(null);
-    setLevelId(''); setTeacherName(''); setGroupCourse('');
+    setLevelId(''); setTeacherName(''); setGroupCourse(''); setVideoCourse('');
     setSlotIdxs([]); setStartDate('');
+    setVoucher(''); setVoucherPct(0); setVoucherMsg('');
     setFirstName(''); setLastName(''); setEmail(''); setPhone('');
     setTelegram(''); setFacebook(''); setNotes('');
   };
@@ -332,7 +378,7 @@ export default function BookingSection() {
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="h-full flex flex-col">
                 <h4 className="text-2xl font-bold text-gray-900 mb-6">What would you like to study?</h4>
 
-                <div className="grid sm:grid-cols-2 gap-4 mb-8">
+                <div className="grid sm:grid-cols-3 gap-4 mb-8">
                   <button type="button" onClick={() => chooseMode('one-to-one')}
                     className={`text-left p-5 rounded-2xl border-2 transition-colors ${
                       mode === 'one-to-one' ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
@@ -350,6 +396,17 @@ export default function BookingSection() {
                     <div className="font-bold text-gray-900">Group course</div>
                     <div className="text-sm text-gray-600 mt-1">Fixed timetable, learn with others.</div>
                   </button>
+
+                  {videoCourses.length > 0 && (
+                    <button type="button" onClick={() => chooseMode('video')}
+                      className={`text-left p-5 rounded-2xl border-2 transition-colors ${
+                        mode === 'video' ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
+                      }`}>
+                      <PlayCircle className="w-6 h-6 text-brand-600 mb-3" />
+                      <div className="font-bold text-gray-900">Video course</div>
+                      <div className="text-sm text-gray-600 mt-1">Recorded. Watch whenever you like.</div>
+                    </button>
+                  )}
                 </div>
 
                 {mode === 'one-to-one' && (
@@ -405,6 +462,27 @@ export default function BookingSection() {
                   </div>
                 )}
 
+                {mode === 'video' && (
+                  <div className="space-y-2 flex-grow">
+                    {videoCourses.map(v => (
+                      <button key={v.id} type="button" onClick={() => setVideoCourse(v.title)}
+                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
+                          videoCourse === v.title ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
+                        }`}>
+                        <span>
+                          <span className="block font-semibold text-gray-900">{v.title}</span>
+                          {(v.lessons || v.level) && (
+                            <span className="block text-xs text-gray-500 mt-1">
+                              {[v.lessons, v.level].filter(Boolean).join(' · ')}
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-bold text-brand-600 whitespace-nowrap">{money(v.fee)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="mt-8 flex justify-end pt-4 border-t border-gray-100">
                   <button type="button" onClick={() => setStep(2)} disabled={!step1Done}
                     className="px-8 py-3 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
@@ -420,7 +498,9 @@ export default function BookingSection() {
                 <div className="flex items-center gap-4 mb-6">
                   <button type="button" onClick={() => setStep(1)} className="text-sm font-medium text-gray-500 hover:text-gray-900">Back</button>
                   <h4 className="text-2xl font-bold text-gray-900">
-                    {mode === 'group' ? 'Your group timetable' : 'Choose your teacher and times'}
+                    {mode === 'group' ? 'Your group timetable'
+                      : mode === 'video' ? 'Your video course'
+                      : 'Choose your teacher and times'}
                   </h4>
                 </div>
 
@@ -432,11 +512,21 @@ export default function BookingSection() {
                         {matchingTeachers.map(t => (
                           <button key={t.name} type="button"
                             onClick={() => { setTeacherName(t.name); setSlotIdxs([]); }}
-                            className={`text-left p-4 rounded-xl border transition-colors ${
+                            className={`text-left p-4 rounded-xl border transition-colors flex gap-3 ${
                               teacherName === t.name ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                             }`}>
-                            <div className="font-semibold text-gray-900">{t.name}</div>
-                            <div className="text-xs text-gray-600 mt-1 leading-relaxed">{t.blurb}</div>
+                            {t.photo ? (
+                              <img src={teacherPhotoUrl(t.photo)} alt=""
+                                className="w-12 h-12 rounded-full object-cover shrink-0" />
+                            ) : (
+                              <span className="w-12 h-12 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold shrink-0">
+                                {t.name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}
+                              </span>
+                            )}
+                            <span>
+                              <span className="block font-semibold text-gray-900">{t.name}</span>
+                              <span className="block text-xs text-gray-600 mt-1 leading-relaxed">{t.blurb}</span>
+                            </span>
                           </button>
                         ))}
                         {matchingTeachers.length === 0 && (
@@ -482,6 +572,16 @@ export default function BookingSection() {
                           onChange={e => setStartDate(e.target.value)} className={field} />
                       </div>
                     )}
+                  </div>
+                ) : mode === 'video' ? (
+                  <div className="flex-grow flex flex-col items-center justify-center text-center p-8 bg-gray-50 rounded-xl border border-gray-100">
+                    <PlayCircle className="w-12 h-12 text-brand-300 mb-4" />
+                    <h5 className="text-lg font-bold text-gray-900 mb-2">{videoCourse}</h5>
+                    {videoObj?.summary && <p className="text-gray-600 max-w-md">{videoObj.summary}</p>}
+                    <p className="text-sm text-gray-600 max-w-md mt-3">
+                      {videoObj?.access_note
+                        || 'Once your payment is confirmed we send you the lessons and you can start straight away.'}
+                    </p>
                   </div>
                 ) : (
                   <div className="flex-grow flex flex-col items-center justify-center text-center p-8 bg-gray-50 rounded-xl border border-gray-100">
@@ -573,6 +673,36 @@ export default function BookingSection() {
                     <textarea id="notes" rows={3} placeholder="Your goals, your current level, questions…"
                       value={notes} onChange={e => setNotes(e.target.value)} className={`${field} resize-none`} />
                   </div>
+
+                  {isLive && (
+                    <div className="p-4 rounded-xl border border-gold-300 bg-gold-100/40">
+                      <label htmlFor="voucher" className="block text-sm font-bold text-gray-900 mb-1">
+                        Returning student? Enter your voucher code
+                      </label>
+                      <p className="text-xs text-gray-600 mb-3">
+                        Leave this empty if you do not have one.
+                      </p>
+                      <div className="flex gap-2">
+                        <input id="voucher" value={voucher} placeholder="EE1A2B3C"
+                          onChange={e => { setVoucher(e.target.value.toUpperCase()); setVoucherPct(0); setVoucherMsg(''); }}
+                          className={`${field} font-mono uppercase`} />
+                        <button type="button" onClick={applyVoucher} disabled={checking || !voucher.trim()}
+                          className="px-5 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-semibold disabled:opacity-50 whitespace-nowrap">
+                          {checking ? 'Checking…' : 'Apply'}
+                        </button>
+                      </div>
+                      {voucherMsg && (
+                        <p className={`text-sm mt-2 font-medium ${voucherPct ? 'text-green-700' : 'text-red-600'}`}>
+                          {voucherMsg}
+                        </p>
+                      )}
+                      {voucherPct > 0 && (
+                        <p className="text-sm text-gray-800 mt-2">
+                          {money(fullFee)} → <strong>{money(fee)}</strong>
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="pt-4 mt-auto">
                     <button type="submit" disabled={sending}

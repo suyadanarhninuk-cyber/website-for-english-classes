@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, ClipboardList, ExternalLink, RefreshCw, UserPlus } from 'lucide-react';
 import { forms, payment, site } from '../data';
-import { isLive, sendTeacherForm } from '../supabase';
+import { isLive, isTelegramLink, sendTeacherForm } from '../supabase';
 import { notify } from '../notify';
 
 /* Teachers fill this in themselves.
@@ -25,6 +25,9 @@ const guidance: Record<Mode, { title: string; lead: string; steps: string[] }> =
       'The hours you are free each week, written one day per line',
       'What you would like to be paid per session',
       'The wallet you want to be paid into — KBZPay, AYA Pay or CB Pay — and the name on it',
+      'Your teaching qualifications, if you have any — TKT, CELTA, a degree',
+      'A short demo lesson, uploaded to Telegram, so students can hear you teach',
+      'Whether you would also like to record video classes students watch in their own time',
     ],
   },
   update: {
@@ -54,6 +57,9 @@ export default function TeacherPortal() {
   const [payoutMethod, setPayoutMethod] = useState('');
   const [payoutNumber, setPayoutNumber] = useState('');
   const [payoutName, setPayoutName] = useState('');
+  const [quals, setQuals] = useState('');
+  const [demoUrl, setDemoUrl] = useState('');
+  const [teachesVideo, setTeachesVideo] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
@@ -64,6 +70,10 @@ export default function TeacherPortal() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (demoUrl.trim() && !isTelegramLink(demoUrl)) {
+      setError('The demo lesson must be a Telegram link, starting https://t.me/');
+      return;
+    }
     setSending(true);
     setError('');
     const res = await sendTeacherForm({
@@ -73,6 +83,9 @@ export default function TeacherPortal() {
       payout_method: payoutMethod.trim(),
       payout_number: payoutNumber.trim(),
       payout_name: payoutName.trim(),
+      qualifications: quals.trim(),
+      demo_url: demoUrl.trim(),
+      teaches_video: teachesVideo,
     });
     setSending(false);
     if (!res.ok) { setError(res.message); return; }
@@ -91,6 +104,9 @@ export default function TeacherPortal() {
         hours: availability.trim(),
         asking_to_be_paid: feeRequest.trim(),
         pay_into: [payoutMethod, payoutNumber, payoutName].filter(Boolean).join(' · '),
+        qualifications: quals.trim(),
+        demo_lesson: demoUrl.trim(),
+        wants_video_classes: teachesVideo ? 'Yes' : 'No',
         action: 'Open your admin page, Teachers tab, to approve or reply.',
       },
     );
@@ -272,6 +288,43 @@ export default function TeacherPortal() {
                           Private between you and us. Never shown on the website.
                         </p>
                       </div>
+
+                      <div>
+                        <label htmlFor="t-quals" className="block text-sm font-medium text-gray-700 mb-1">
+                          Your qualifications <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <input id="t-quals" value={quals} onChange={e => setQuals(e.target.value)}
+                          placeholder="TKT Band 3, CELTA, BA English" className={field} />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Separate them with commas. Students see these once we have checked them.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label htmlFor="t-demo" className="block text-sm font-medium text-gray-700 mb-1">
+                          Demo lesson <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <input id="t-demo" value={demoUrl} onChange={e => setDemoUrl(e.target.value)}
+                          placeholder="https://t.me/yourchannel/12" className={field} />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Upload a short video to Telegram, then paste the link to it here.
+                          Telegram links only — anything else is refused.
+                        </p>
+                      </div>
+
+                      <label className="flex items-start gap-3 p-4 rounded-xl border border-gray-200 cursor-pointer hover:border-brand-400 transition-colors">
+                        <input type="checkbox" checked={teachesVideo} className="mt-1"
+                          onChange={e => setTeachesVideo(e.target.checked)} />
+                        <span>
+                          <span className="block text-sm font-semibold text-gray-900">
+                            I would also like to record video classes
+                          </span>
+                          <span className="block text-xs text-gray-600 mt-0.5 leading-relaxed">
+                            Lessons you record once, that students buy and watch in their own time.
+                            Send your demo on Telegram above and we will talk it through with you.
+                          </span>
+                        </span>
+                      </label>
 
                       <div className="pt-4 border-t border-gray-100">
                         <p className="text-sm font-semibold text-gray-900 mb-1">Where should we send your pay?</p>

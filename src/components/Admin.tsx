@@ -6,12 +6,15 @@ import {
   EnrolmentRow, GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
   adminLoadAll, adminLoadEnrolments, deleteEnrolment, deleteGroupClass, deleteReview,
   deleteSubmission, deleteTeacher, isLive, markSubmissionHandled, saveGroupClass,
-  saveTeacher, screenshotUrl, setEnrolmentStatus, setReviewStatus,
+  isTelegramLink, saveTeacher, screenshotUrl, setEnrolmentAccess, setEnrolmentStatus, setReviewStatus,
   signIn, signOut, supabase,
 } from '../supabase';
 import {
-  PaymentRequest, TeacherPrivateRow, adminLoadPayments, deleteRequest, markRequestPaid,
-  payoutProofUrl, rejectRequest, saveTeacherPrivate, uploadPayoutProof,
+  PaymentRequest, TeacherPrivateRow, VideoCourseRow, VoucherAttempt, VoucherRow,
+  adminLoadPayments, adminLoadVideoCourses, adminLoadVouchers, approveTeacherPhoto,
+  cancelVoucher, deleteRequest, deleteVideoCourse, markRequestPaid, payoutProofUrl,
+  rejectRequest, rejectTeacherPhoto, removeTeacherPhoto, saveTeacherPrivate,
+  saveVideoCourse, teacherPhotoUrl, uploadPayoutProof, voucherProofUrl,
 } from '../supabase';
 import { money, receiptLink } from '../contact';
 
@@ -27,7 +30,7 @@ import { Availability } from '../data';
    database are what enforce that — not this page. Even if someone opened
    this screen, without your login the database refuses every change. */
 
-type Tab = 'enrolments' | 'classes' | 'teachers' | 'payments' | 'reviews';
+type Tab = 'enrolments' | 'classes' | 'video' | 'teachers' | 'payments' | 'vouchers' | 'reviews';
 
 const input =
   'w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none';
@@ -65,6 +68,9 @@ export default function Admin() {
   const [enrolments, setEnrolments] = useState<EnrolmentRow[]>([]);
   const [requests, setRequests] = useState<(PaymentRequest & { teacher_id: string })[]>([]);
   const [privates, setPrivates] = useState<TeacherPrivateRow[]>([]);
+  const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
+  const [attempts, setAttempts] = useState<VoucherAttempt[]>([]);
+  const [videos, setVideos] = useState<VideoCourseRow[]>([]);
   const [month, setMonth] = useState(thisMonth());
   const [classes, setClasses] = useState<GroupClassRow[]>([]);
   const [teacherRows, setTeacherRows] = useState<TeacherRow[]>([]);
@@ -86,12 +92,16 @@ export default function Admin() {
 
   const refresh = async () => {
     setBusy(true);
-    const [data, bookings, pay] = await Promise.all([
+    const [data, bookings, pay, vouch, vids] = await Promise.all([
       adminLoadAll(), adminLoadEnrolments(), adminLoadPayments(),
+      adminLoadVouchers(), adminLoadVideoCourses(),
     ]);
     setEnrolments(bookings);
     setRequests(pay.requests);
     setPrivates(pay.privates);
+    setVouchers(vouch.vouchers);
+    setAttempts(vouch.attempts);
+    setVideos(vids);
     setBusy(false);
     if (!data) return;
     setClasses(data.groupClasses);
@@ -232,6 +242,9 @@ export default function Admin() {
       platform: 'Zoom',
       blurb: s.blurb,
       availability: textToAvailability(s.availability_text) as unknown as Availability[],
+      qualifications: (s.qualifications ?? '').split(',').map(x => x.trim()).filter(Boolean),
+      demo_url: s.demo_url ?? '',
+      teaches_video: s.teaches_video ?? false,
       status: 'pending',
       sort_order: teacherRows.length + 1,
     });
@@ -294,14 +307,42 @@ export default function Admin() {
   };
 
   const owedRequests = requests.filter(r => r.status === 'requested');
+  const photosWaiting = teacherRows.filter(t => t.photo_pending).length;
+
+  const editVideo = (id: string, patch: Partial<VideoCourseRow>) =>
+    setVideos(prev => prev.map(v => (v.id === id ? { ...v, ...patch } : v)));
+
+  const addVideo = () => setVideos(prev => [...prev, {
+    id: `new-${Date.now()}`, title: '', summary: '', fee: 0, lessons: '',
+    level: '', access_note: '', visible: true, sort_order: prev.length + 1,
+  }]);
+
+  const saveVideos = async () => {
+    setBusy(true);
+    for (const v of videos) {
+      if (!v.title.trim()) continue;
+      const row: Partial<VideoCourseRow> = {
+        title: v.title.trim(), summary: v.summary, fee: Number(v.fee) || 0,
+        lessons: v.lessons, level: v.level, access_note: v.access_note,
+        visible: v.visible, sort_order: v.sort_order,
+      };
+      if (!v.id.startsWith('new-')) row.id = v.id;
+      await saveVideoCourse(row);
+    }
+    await refresh();
+    setBusy(false);
+    flash('Saved. Students can see your video courses now.');
+  };
   const privateFor = (id: string) => privates.find(p => p.teacher_id === id);
   const teacherName = (id: string) => teacherRows.find(t => t.id === id)?.name ?? 'Teacher';
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'enrolments', label: 'Enrolments', count: waitingPayments.length },
     { id: 'classes', label: 'Group classes' },
-    { id: 'teachers', label: 'Teachers', count: waiting.length },
+    { id: 'video', label: 'Video courses' },
+    { id: 'teachers', label: 'Teachers', count: waiting.length + photosWaiting },
     { id: 'payments', label: 'Teacher pay', count: owedRequests.length },
+    { id: 'vouchers', label: 'Vouchers' },
     { id: 'reviews', label: 'Reviews', count: pendingReviews.length },
   ];
 
@@ -479,6 +520,23 @@ export default function Admin() {
                       <Row label="Teaches" value={s.courses} />
                     </dl>
 
+                    {s.qualifications && (
+                      <p className="text-sm text-gray-700 mt-3">
+                        <span className="text-gray-500">Qualifications:</span> {s.qualifications}
+                      </p>
+                    )}
+                    {s.teaches_video && (
+                      <p className="inline-block mt-3 px-2 py-1 rounded-md bg-gold-100 text-brand-800 text-xs font-bold">
+                        Wants to record video classes
+                      </p>
+                    )}
+                    {s.demo_url && (
+                      <a href={s.demo_url} target="_blank" rel="noopener noreferrer"
+                        className="inline-block text-sm font-semibold text-brand-700 mt-2">
+                        Watch their demo lesson →
+                      </a>
+                    )}
+
                     {s.blurb && <p className="text-sm text-gray-700 mt-3">{s.blurb}</p>}
 
                     {s.availability_text && (
@@ -570,6 +628,37 @@ export default function Admin() {
                       </div>
 
                       <div className="md:col-span-6">
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Qualifications — separate with commas
+                        </label>
+                        <input value={(t.qualifications ?? []).join(', ')}
+                          onChange={e => editTeacher(t.id, {
+                            qualifications: e.target.value.split(',').map(x => x.trim()).filter(Boolean),
+                          })}
+                          placeholder="TKT Band 3, CELTA" className={input} />
+                      </div>
+                      <div className="md:col-span-6">
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Demo lesson — Telegram link only
+                        </label>
+                        <input value={t.demo_url ?? ''}
+                          onChange={e => editTeacher(t.id, { demo_url: e.target.value })}
+                          placeholder="https://t.me/…" className={input} />
+                        {t.demo_url && !isTelegramLink(t.demo_url) && (
+                          <p className="text-xs text-red-600 mt-1">
+                            Not a Telegram link — saving this will be refused.
+                          </p>
+                        )}
+                      </div>
+                      <div className="md:col-span-12">
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <input type="checkbox" checked={t.teaches_video ?? false}
+                            onChange={e => editTeacher(t.id, { teaches_video: e.target.checked })} />
+                          Records video classes
+                        </label>
+                      </div>
+
+                      <div className="md:col-span-6">
                         <label className="block text-xs text-gray-500 mb-1">Short description</label>
                         <textarea rows={3} value={t.blurb} onChange={e => editTeacher(t.id, { blurb: e.target.value })}
                           className={`${input} resize-none`} />
@@ -585,6 +674,55 @@ export default function Admin() {
                       </div>
                     </div>
 
+                    {(t.photo || t.photo_pending) && (
+                      <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-gray-100">
+                        {t.photo && (
+                          <div className="text-center">
+                            <img src={teacherPhotoUrl(t.photo)} alt=""
+                              className="w-16 h-16 rounded-full object-cover mx-auto" />
+                            <div className="text-xs text-gray-500 mt-1">On the site</div>
+                          </div>
+                        )}
+                        {t.photo_pending && (
+                          <div className="text-center">
+                            <img src={teacherPhotoUrl(t.photo_pending)} alt=""
+                              className="w-16 h-16 rounded-full object-cover mx-auto ring-2 ring-amber-400" />
+                            <div className="text-xs text-amber-700 mt-1">Waiting</div>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {t.photo_pending && (
+                            <>
+                              <button onClick={async () => {
+                                await approveTeacherPhoto(t.id, t.photo_pending); refresh();
+                                flash(`${t.name}'s photo is live.`);
+                              }} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
+                                Use this photo
+                              </button>
+                              <button onClick={async () => { await rejectTeacherPhoto(t.id); refresh(); }}
+                                className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+                                Refuse it
+                              </button>
+                            </>
+                          )}
+                          {t.photo && (
+                            <button onClick={async () => {
+                              if (confirm(`Take ${t.name}'s photo off the website?`)) {
+                                await removeTeacherPhoto(t.id); refresh();
+                              }
+                            }} className={`${btn} text-red-600 hover:bg-red-50`}>
+                              Remove photo
+                            </button>
+                          )}
+                          {!t.photo_consent && t.photo_pending && (
+                            <span className="text-xs text-red-600 self-center">
+                              They have not ticked the consent box
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <TeacherPrivatePanel teacher={t} row={privateFor(t.id)} onSaved={refresh} />
 
                     <div className="flex gap-2 mt-3">
@@ -595,6 +733,126 @@ export default function Admin() {
                         Remove
                       </button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+
+        {/* VIDEO COURSES */}
+        {tab === 'video' && (
+          <section className="bg-white rounded-2xl border border-gray-200 p-5">
+            <div className="flex flex-wrap items-center gap-3 mb-5">
+              <h2 className="font-bold text-gray-900">Video courses</h2>
+              <button onClick={addVideo} className={`${btn} bg-white border border-gray-300 text-gray-700 flex items-center gap-2`}>
+                <Plus className="w-4 h-4" /> Add a course
+              </button>
+              <button onClick={saveVideos} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700 ml-auto`}>
+                {busy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-500 mb-4">
+              Recorded courses students buy once. They appear on the website and in the booking
+              form. Untick <em>Show</em> to hide one without deleting it.
+            </p>
+
+            <div className="space-y-3">
+              {videos.map(v => (
+                <div key={v.id} className="grid md:grid-cols-12 gap-3 p-3 rounded-xl border border-gray-200">
+                  <div className="md:col-span-5">
+                    <label className="block text-xs text-gray-500 mb-1">Title</label>
+                    <input value={v.title} onChange={e => editVideo(v.id, { title: e.target.value })}
+                      placeholder="IELTS Writing Task 2 — full course" className={input} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Fee ({site.currency})</label>
+                    <input type="number" value={v.fee}
+                      onChange={e => editVideo(v.id, { fee: Number(e.target.value) })} className={input} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Length</label>
+                    <input value={v.lessons} onChange={e => editVideo(v.id, { lessons: e.target.value })}
+                      placeholder="12 videos · 6 hours" className={input} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Level</label>
+                    <input value={v.level} onChange={e => editVideo(v.id, { level: e.target.value })}
+                      placeholder="Intermediate up" className={input} />
+                  </div>
+                  <div className="md:col-span-1 flex items-center gap-2 pb-2">
+                    <label className="flex items-center gap-1 text-xs text-gray-600">
+                      <input type="checkbox" checked={v.visible}
+                        onChange={e => editVideo(v.id, { visible: e.target.checked })} />
+                      Show
+                    </label>
+                    <button onClick={async () => {
+                      if (!confirm(`Remove ${v.title || 'this course'}?`)) return;
+                      if (!v.id.startsWith('new-')) await deleteVideoCourse(v.id);
+                      setVideos(prev => prev.filter(x => x.id !== v.id));
+                    }} className="text-gray-400 hover:text-red-600">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="md:col-span-6">
+                    <input value={v.summary} onChange={e => editVideo(v.id, { summary: e.target.value })}
+                      placeholder="What the course covers" className={`${input} text-xs`} />
+                  </div>
+                  <div className="md:col-span-6">
+                    <input value={v.access_note} onChange={e => editVideo(v.id, { access_note: e.target.value })}
+                      placeholder="What happens after they pay — e.g. we send the link on Telegram"
+                      className={`${input} text-xs`} />
+                  </div>
+                </div>
+              ))}
+              {videos.length === 0 && (
+                <p className="text-sm text-gray-500 py-8 text-center">
+                  No video courses yet. The section stays hidden on the website until you add one.
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* VOUCHERS */}
+        {tab === 'vouchers' && (
+          <>
+            <section className="bg-white rounded-2xl border border-gray-200 p-5">
+              <h2 className="font-bold text-gray-900 mb-1">Returning student codes</h2>
+              <p className="text-sm text-gray-500 mb-5">
+                Given out by the draw. Check the proof they uploaded — if someone has not really
+                studied with you, cancel their code before they spend it.
+              </p>
+
+              {vouchers.length === 0 && (
+                <p className="text-sm text-gray-500 py-8 text-center">No codes yet.</p>
+              )}
+
+              <div className="space-y-2">
+                {vouchers.map(v => <VoucherCard key={v.id} row={v} onDone={refresh} />)}
+              </div>
+            </section>
+
+            <section className="bg-white rounded-2xl border border-gray-200 p-5">
+              <h2 className="font-bold text-gray-900 mb-1">Codes that did not work</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Every code typed at enrolment that we refused. A few are honest typos. The same
+                wrong code over and over is someone guessing.
+              </p>
+
+              {attempts.length === 0 && (
+                <p className="text-sm text-gray-500 py-6 text-center">Nothing to show.</p>
+              )}
+
+              <div className="divide-y divide-gray-100">
+                {attempts.map(a => (
+                  <div key={a.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                    <span className="font-mono font-semibold text-gray-900">{a.code_tried || '(empty)'}</span>
+                    <span className="text-gray-500">{a.reason}</span>
+                    <span className="text-gray-400 ml-auto text-xs">
+                      {new Date(a.created_at).toLocaleString('en-GB')}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -743,6 +1001,65 @@ function TeacherPrivatePanel({
   );
 }
 
+function VoucherCard({ row, onDone }: { row: VoucherRow; onDone: () => void }) {
+  const [proof, setProof] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const look = async () => {
+    if (!proof) setProof(await voucherProofUrl(row.proof_file));
+    setOpen(o => !o);
+  };
+
+  const expired = new Date(row.expires_at) < new Date();
+  const tone = row.status === 'used' ? 'bg-gray-100 text-gray-700'
+    : row.status === 'cancelled' ? 'bg-red-100 text-red-800'
+    : expired ? 'bg-gray-100 text-gray-500'
+    : 'bg-green-100 text-green-800';
+  const word = row.status === 'used' ? `Used · ${row.used_reference}`
+    : row.status === 'cancelled' ? 'Cancelled'
+    : expired ? 'Expired' : 'Live';
+
+  return (
+    <div className="p-4 rounded-xl border border-gray-200">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="font-mono font-bold text-gray-900">{row.code}</span>
+        <span className="px-2 py-0.5 rounded bg-gold-100 text-brand-800 text-xs font-bold">
+          {row.percent}% off
+        </span>
+        <span className={`px-2 py-0.5 rounded text-xs font-bold ${tone}`}>{word}</span>
+        <span className="text-sm text-gray-600">
+          {row.student_name} · {row.phone}{row.telegram && ` · ${row.telegram}`}
+        </span>
+        <span className="text-xs text-gray-400 ml-auto">
+          expires {new Date(row.expires_at).toLocaleDateString('en-GB')}
+        </span>
+      </div>
+
+      {open && proof && (
+        <img src={proof} alt="Proof of a previous class"
+          className="max-h-80 rounded-lg border border-gray-300 mt-3" />
+      )}
+
+      <div className="flex flex-wrap gap-2 mt-3">
+        {row.proof_file && (
+          <button onClick={look} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+            {open ? 'Hide proof' : 'See their proof'}
+          </button>
+        )}
+        {row.status === 'unused' && (
+          <button onClick={async () => {
+            if (confirm(`Cancel ${row.code}? They will not be able to use it.`)) {
+              await cancelVoucher(row.id); onDone();
+            }
+          }} className={`${btn} text-red-600 hover:bg-red-50 ml-auto`}>
+            Cancel this code
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PayRequestCard({
   row, name, wallet, onDone, onFlash,
 }: {
@@ -883,6 +1200,16 @@ function EnrolmentCard({
   const [shot, setShot] = useState('');
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [link, setLink] = useState(row.access_url ?? '');
+  const [linkNote, setLinkNote] = useState(row.access_note ?? '');
+  const [saved, setSaved] = useState(false);
+
+  const saveLink = async () => {
+    await setEnrolmentAccess(row.id, link.trim(), linkNote.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
 
   const viewScreenshot = async () => {
     if (!shot) setShot(await screenshotUrl(row.payment_file));
@@ -940,10 +1267,43 @@ function EnrolmentCard({
         </div>
       )}
 
+      {sending && (
+        <div className="mt-4 p-4 rounded-xl border border-gray-300 bg-gray-50 space-y-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">
+              Link to their class — Zoom room, video course, anything
+            </label>
+            <input value={link} onChange={e => setLink(e.target.value)}
+              placeholder="https://zoom.us/j/… or https://t.me/…" className={input} />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">What to tell them</label>
+            <textarea rows={2} value={linkNote} onChange={e => setLinkNote(e.target.value)}
+              placeholder="Your first lesson is Monday at 6 PM. Use this room every week."
+              className={`${input} resize-none`} />
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={saveLink} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
+              Save and send
+            </button>
+            {saved && <span className="text-sm text-green-700">Saved — it is on their page now.</span>}
+          </div>
+          <p className="text-xs text-gray-500">
+            The student sees this on their own private link, and only because their payment
+            is confirmed. Press <strong>Copy their link</strong> to send it on Telegram.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2 mt-4">
         {row.payment_file && (
           <button onClick={viewScreenshot} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
             {open ? 'Hide screenshot' : 'View screenshot'}
+          </button>
+        )}
+        {row.status === 'confirmed' && (
+          <button onClick={() => setSending(v => !v)} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+            {sending ? 'Close' : row.access_url ? 'Change their class link' : 'Send their class link'}
           </button>
         )}
         {row.status !== 'confirmed' && (

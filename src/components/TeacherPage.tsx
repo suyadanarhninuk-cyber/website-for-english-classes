@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Clock, Loader2, Wallet } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, Loader2, PlayCircle, Wallet } from 'lucide-react';
 import { payment, site } from '../data';
 import { money } from '../contact';
 import {
-  TeacherHome, payoutProofUrl, teacherHome, teacherRequestPayment,
-  teacherSubmitHours, teacherUpdatePayout,
+  TeacherHome, isTelegramLink, payoutProofUrl, teacherHome, teacherPhotoUrl,
+  teacherRequestPayment, teacherSetPhoto, teacherSetVideo, teacherSubmitHours,
+  teacherUpdatePayout, uploadTeacherPhoto,
 } from '../supabase';
 
 /* Lives at  effortlesseducation.uk/#teacher/<their token>
@@ -61,6 +62,47 @@ export default function TeacherPage({ token }: { token: string }) {
       ? 'Sent. Your new hours go live once Effortless Education approves them.'
       : res.message);
     if (res.ok) setHoursNote('');
+  };
+
+  /* photo */
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [consent, setConsent] = useState(false);
+  useEffect(() => { if (me) setConsent(Boolean(me.photo_consent)); }, [me]);
+
+  const sendPhoto = async () => {
+    if (!photoFile) { flash('Choose a photo first.'); return; }
+    if (!consent) { flash('Please tick the box to say we may show your photo.'); return; }
+    setBusy(true);
+    const up = await uploadTeacherPhoto(token, photoFile);
+    if (!up.ok) { setBusy(false); flash(up.message); return; }
+    const res = await teacherSetPhoto(token, up.path, consent);
+    setBusy(false);
+    if (!res.ok) { flash(res.message); return; }
+    setPhotoFile(null);
+    flash('Sent. Your photo appears once Effortless Education approves it.');
+    load();
+  };
+
+  /* recorded video classes */
+  const [wantsVideo, setWantsVideo] = useState(false);
+  const [videoDemo, setVideoDemo] = useState('');
+  useEffect(() => {
+    if (!me) return;
+    setWantsVideo(Boolean(me.teaches_video));
+    setVideoDemo(me.demo_url ?? '');
+  }, [me]);
+
+  const sendVideoOffer = async () => {
+    if (videoDemo.trim() && !isTelegramLink(videoDemo)) {
+      flash('The demo must be a Telegram link, starting https://t.me/');
+      return;
+    }
+    setBusy(true);
+    const res = await teacherSetVideo(token, wantsVideo, videoDemo.trim());
+    setBusy(false);
+    flash(res.ok
+      ? 'Sent. We will look at your demo and message you.'
+      : res.message);
   };
 
   /* payout details */
@@ -151,6 +193,56 @@ export default function TeacherPage({ token }: { token: string }) {
           </div>
         )}
 
+        {/* photo */}
+        <section className={card}>
+          <div className="flex items-center gap-2 mb-1">
+            <Camera className="w-5 h-5 text-brand-600" />
+            <h2 className="text-lg font-bold text-gray-900">Your photo</h2>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Optional. Students choosing a one-to-one teacher like to see who they will be
+            learning with. Without one, your initials are shown instead.
+          </p>
+
+          <div className="flex items-center gap-5">
+            {me.photo ? (
+              <img src={teacherPhotoUrl(me.photo)} alt=""
+                className="w-20 h-20 rounded-full object-cover border border-gray-200" />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-xl">
+                {me.name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}
+              </div>
+            )}
+
+            <div className="flex-1">
+              <label className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-500 bg-gray-50 text-sm">
+                <span className="truncate">{photoFile ? photoFile.name : 'Choose a photo'}</span>
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={e => setPhotoFile(e.target.files?.[0] ?? null)} />
+              </label>
+              {me.photo_pending && (
+                <p className="text-xs text-amber-700 mt-2">
+                  A new photo is waiting to be approved.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <label className="flex items-start gap-2 mt-4 text-sm text-gray-700">
+            <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
+              className="mt-1" />
+            <span>
+              I am happy for {site.shortName} to show this photo publicly on the website.
+              I can ask for it to be removed at any time.
+            </span>
+          </label>
+
+          <button onClick={sendPhoto} disabled={busy}
+            className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
+            Send my photo
+          </button>
+        </section>
+
         {/* hours */}
         <section className={card}>
           <div className="flex items-center gap-2 mb-1">
@@ -177,6 +269,46 @@ export default function TeacherPage({ token }: { token: string }) {
             className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
             Send my new hours
           </button>
+        </section>
+
+        {/* recorded video classes */}
+        <section className={card}>
+          <div className="flex items-center gap-2 mb-1">
+            <PlayCircle className="w-5 h-5 text-brand-600" />
+            <h2 className="text-lg font-bold text-gray-900">Video classes</h2>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Lessons you record once, that students buy and watch whenever they like. Tell us
+            if you would like to make them and send a short demo on Telegram.
+          </p>
+
+          <label className="flex items-start gap-3 p-4 rounded-xl border border-gray-200 cursor-pointer hover:border-brand-400 transition-colors mb-4">
+            <input type="checkbox" checked={wantsVideo} className="mt-1"
+              onChange={e => setWantsVideo(e.target.checked)} />
+            <span className="text-sm text-gray-900 font-medium">
+              I would like to teach recorded video classes
+            </span>
+          </label>
+
+          <label htmlFor="v-demo" className="block text-sm font-medium text-gray-700 mb-1">
+            Your demo on Telegram
+          </label>
+          <input id="v-demo" value={videoDemo} onChange={e => setVideoDemo(e.target.value)}
+            placeholder="https://t.me/yourchannel/12" className={field} />
+          <p className="text-xs text-gray-500 mt-1">
+            Upload the video to Telegram, then paste the link here. Telegram links only.
+          </p>
+
+          <button onClick={sendVideoOffer} disabled={busy}
+            className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
+            Send to Effortless Education
+          </button>
+
+          {me.teaches_video && (
+            <p className="text-xs text-green-700 mt-3">
+              You are currently listed as recording video classes.
+            </p>
+          )}
         </section>
 
         {/* payment details */}

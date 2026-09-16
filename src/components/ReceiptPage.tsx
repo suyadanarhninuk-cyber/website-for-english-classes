@@ -21,6 +21,8 @@ const toEnrolment = (r: Record<string, unknown>): Enrolment => ({
   paymentLast6: String(r.payment_last6 ?? ''),
   paidAt: (r.paid_at as string) ?? null,
   confirmedAt: (r.confirmed_at as string) ?? null,
+  accessUrl: String(r.access_url ?? ''),
+  accessNote: String(r.access_note ?? ''),
   firstName: String(r.first_name ?? ''),
   lastName: String(r.last_name ?? ''),
   email: String(r.email ?? ''),
@@ -116,6 +118,26 @@ export default function ReceiptPage({ token }: { token: string }) {
           <p className="mb-5 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-sm text-green-800 no-print">
             Your payment is confirmed. This is your receipt — print it or save it as a PDF.
           </p>
+        )}
+
+        {record.status === 'confirmed' && (record.accessUrl || record.accessNote) && (
+          <div className="mb-5 p-5 rounded-2xl bg-white border-2 no-print"
+            style={{ borderColor: site.brandColour }}>
+            <h2 className="font-bold text-gray-900 mb-1">Your class</h2>
+            {record.accessNote && (
+              <p className="text-sm text-gray-600 mb-3 whitespace-pre-line">{record.accessNote}</p>
+            )}
+            {record.accessUrl && (
+              <a href={record.accessUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-block px-5 py-3 rounded-xl text-white font-semibold"
+                style={{ backgroundColor: site.brandColour }}>
+                Open my class
+              </a>
+            )}
+            <p className="text-xs text-gray-500 mt-3">
+              This link is yours. Please do not share it.
+            </p>
+          </div>
         )}
         {record.status === 'checking' && (
           <p className="mb-5 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-900 no-print">

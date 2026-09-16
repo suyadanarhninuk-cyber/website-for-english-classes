@@ -1,7 +1,7 @@
 import React from 'react';
 import { payment, receipt, site } from '../data';
 import {
-  Enrolment, fullName, longDate, money, paymentRule,
+  Enrolment, discountAmount, fullName, longDate, money, paymentRule,
 } from '../contact';
 
 /* The printed document.
@@ -162,6 +162,18 @@ export default function Receipt({ enrolment }: { enrolment: Enrolment }) {
 
       {/* amount */}
       <section className="mt-6 border border-gray-300 rounded-md overflow-hidden">
+        {!!e.discountPercent && (
+          <div className="px-4 py-3 text-sm border-b border-gray-200">
+            <div className="flex justify-between gap-4">
+              <span className="text-gray-600">Course fee</span>
+              <span className="font-medium">{money(e.fullFee ?? e.fee)}</span>
+            </div>
+            <div className="flex justify-between gap-4 mt-1" style={{ color: maroon }}>
+              <span>Returning student discount — {e.discountPercent}% · {e.voucherCode}</span>
+              <span className="font-semibold">−{money(discountAmount(e))}</span>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between px-4 py-3 border-b-2"
           style={{ borderColor: gold, backgroundColor: '#faf7f2' }}>
           <span className="text-sm font-semibold">

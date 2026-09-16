@@ -1,7 +1,11 @@
 import React from 'react';
-import { CalendarClock, Video } from 'lucide-react';
+import { CalendarClock, PlayCircle, Video } from 'lucide-react';
 import { oneToOneLevels, site } from '../data';
 import { useContent } from '../content';
+import { teacherPhotoUrl } from '../supabase';
+
+const initials = (name: string) =>
+  name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
 const levelName = (id: string) =>
   oneToOneLevels.find(l => l.id === id)?.name ?? id;
@@ -31,10 +35,20 @@ export default function Teachers() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {teachers.map(t => (
             <div key={t.name} className="rounded-2xl border border-gray-200 p-6 flex flex-col">
-              <h3 className="text-lg font-bold text-gray-900">{t.name}</h3>
+              <div className="flex items-center gap-4">
+                {t.photo ? (
+                  <img src={teacherPhotoUrl(t.photo)} alt={t.name}
+                    className="w-16 h-16 rounded-full object-cover border border-gray-200 shrink-0" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg shrink-0">
+                    {initials(t.name)}
+                  </div>
+                )}
+                <h3 className="text-lg font-bold text-gray-900">{t.name}</h3>
+              </div>
 
               {t.levels.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-3">
+                <div className="flex flex-wrap gap-1.5 mt-4">
                   {t.levels.map(id => (
                     <span key={id} className="text-xs font-medium px-2 py-1 rounded-md bg-brand-50 text-brand-700">
                       {levelName(id)}
@@ -43,7 +57,24 @@ export default function Teachers() {
                 </div>
               )}
 
+              {(t.qualifications?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {t.qualifications!.map(q => (
+                    <span key={q} className="text-xs font-semibold px-2 py-1 rounded-md bg-gold-100 text-brand-800">
+                      {q}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {t.blurb && <p className="text-sm text-gray-600 leading-relaxed mt-4">{t.blurb}</p>}
+
+              {t.demoUrl && (
+                <a href={t.demoUrl} target="_blank" rel="noopener noreferrer"
+                  className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:text-brand-800">
+                  <PlayCircle className="w-4 h-4" /> Watch a demo lesson
+                </a>
+              )}
 
               <div className="mt-5 pt-4 border-t border-gray-100 space-y-2 text-sm text-gray-600 flex-grow">
                 <div className="flex items-center gap-2 text-gray-500">
