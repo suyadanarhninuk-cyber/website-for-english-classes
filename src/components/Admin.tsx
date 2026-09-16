@@ -9,7 +9,14 @@ import {
   saveTeacher, screenshotUrl, setEnrolmentStatus, setReviewStatus,
   signIn, signOut, supabase,
 } from '../supabase';
+import {
+  PaymentRequest, TeacherPrivateRow, adminLoadPayments, deleteRequest, markRequestPaid,
+  payoutProofUrl, rejectRequest, saveTeacherPrivate, uploadPayoutProof,
+} from '../supabase';
 import { money, receiptLink } from '../contact';
+
+const teacherLink = (token: string) =>
+  `${window.location.origin}${window.location.pathname}#teacher/${token}`;
 import { oneToOneLevels, site } from '../data';
 import { monthLabel, thisMonth } from '../content';
 import { Availability } from '../data';
@@ -20,7 +27,7 @@ import { Availability } from '../data';
    database are what enforce that — not this page. Even if someone opened
    this screen, without your login the database refuses every change. */
 
-type Tab = 'enrolments' | 'classes' | 'teachers' | 'reviews';
+type Tab = 'enrolments' | 'classes' | 'teachers' | 'payments' | 'reviews';
 
 const input =
   'w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none';
@@ -56,6 +63,8 @@ export default function Admin() {
 
   const [tab, setTab] = useState<Tab>('enrolments');
   const [enrolments, setEnrolments] = useState<EnrolmentRow[]>([]);
+  const [requests, setRequests] = useState<(PaymentRequest & { teacher_id: string })[]>([]);
+  const [privates, setPrivates] = useState<TeacherPrivateRow[]>([]);
   const [month, setMonth] = useState(thisMonth());
   const [classes, setClasses] = useState<GroupClassRow[]>([]);
   const [teacherRows, setTeacherRows] = useState<TeacherRow[]>([]);
@@ -77,8 +86,12 @@ export default function Admin() {
 
   const refresh = async () => {
     setBusy(true);
-    const [data, bookings] = await Promise.all([adminLoadAll(), adminLoadEnrolments()]);
+    const [data, bookings, pay] = await Promise.all([
+      adminLoadAll(), adminLoadEnrolments(), adminLoadPayments(),
+    ]);
     setEnrolments(bookings);
+    setRequests(pay.requests);
+    setPrivates(pay.privates);
     setBusy(false);
     if (!data) return;
     setClasses(data.groupClasses);
@@ -223,6 +236,17 @@ export default function Admin() {
       sort_order: teacherRows.length + 1,
     });
     if (res.error) { flash(res.error.message); return; }
+
+    const created = (res.data ?? [])[0] as TeacherRow | undefined;
+    if (created) {
+      await saveTeacherPrivate({
+        teacher_id: created.id,
+        phone: s.phone, email: s.email, telegram: s.telegram,
+        payout_method: s.payout_method ?? '', payout_number: s.payout_number ?? '',
+        payout_name: s.payout_name ?? '', agreed_rate: s.fee_request ?? '',
+      });
+    }
+
     await markSubmissionHandled(s.id, true);
     await refresh();
     setTab('teachers');
@@ -269,10 +293,15 @@ export default function Admin() {
     await refresh();
   };
 
+  const owedRequests = requests.filter(r => r.status === 'requested');
+  const privateFor = (id: string) => privates.find(p => p.teacher_id === id);
+  const teacherName = (id: string) => teacherRows.find(t => t.id === id)?.name ?? 'Teacher';
+
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'enrolments', label: 'Enrolments', count: waitingPayments.length },
     { id: 'classes', label: 'Group classes' },
     { id: 'teachers', label: 'Teachers', count: waiting.length },
+    { id: 'payments', label: 'Teacher pay', count: owedRequests.length },
     { id: 'reviews', label: 'Reviews', count: pendingReviews.length },
   ];
 
@@ -556,6 +585,8 @@ export default function Admin() {
                       </div>
                     </div>
 
+                    <TeacherPrivatePanel teacher={t} row={privateFor(t.id)} onSaved={refresh} />
+
                     <div className="flex gap-2 mt-3">
                       <button onClick={() => persistTeacher(t)} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
                         Save {t.name.split(' ')[0]}
@@ -569,6 +600,31 @@ export default function Admin() {
               </div>
             </section>
           </>
+        )}
+
+        {/* TEACHER PAY */}
+        {tab === 'payments' && (
+          <section className="bg-white rounded-2xl border border-gray-200 p-5">
+            <h2 className="font-bold text-gray-900 mb-1">Teacher pay</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              What your teachers have asked for. Their wallet details are shown with each
+              request, so you can pay without hunting for them. Upload your transfer
+              screenshot and the teacher sees it on their own page.
+            </p>
+
+            {requests.length === 0 && (
+              <p className="text-sm text-gray-500 py-8 text-center">No requests yet.</p>
+            )}
+
+            <div className="space-y-3">
+              {requests.map(r => (
+                <PayRequestCard key={r.id} row={r}
+                  name={teacherName(r.teacher_id)}
+                  wallet={privateFor(r.teacher_id)}
+                  onDone={refresh} onFlash={flash} />
+              ))}
+            </div>
+          </section>
         )}
 
         {/* REVIEWS */}
@@ -608,6 +664,199 @@ export default function Admin() {
 }
 
 /* ── small pieces ──────────────────────────────────────────────────── */
+
+/* The private side of a teacher: where you pay them, and the link that
+   is theirs alone. Never rendered on the public site. */
+function TeacherPrivatePanel({
+  teacher, row, onSaved,
+}: {
+  teacher: TeacherRow;
+  row?: TeacherPrivateRow;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    phone: row?.phone ?? '', email: row?.email ?? '', telegram: row?.telegram ?? '',
+    payout_method: row?.payout_method ?? '', payout_number: row?.payout_number ?? '',
+    payout_name: row?.payout_name ?? '', agreed_rate: row?.agreed_rate ?? '',
+    note: row?.note ?? '',
+  });
+
+  const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    setBusy(true);
+    await saveTeacherPrivate({ teacher_id: teacher.id, ...form });
+    setBusy(false);
+    setOpen(false);
+    onSaved();
+  };
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(teacherLink(teacher.token));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-dashed border-gray-300">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Private</span>
+        <span className="text-sm text-gray-700">
+          {form.payout_method || form.payout_number
+            ? `${form.payout_method} ${form.payout_number} · ${form.payout_name}`
+            : 'No payment details yet'}
+        </span>
+        {form.agreed_rate && (
+          <span className="text-sm text-gray-700">· {form.agreed_rate}</span>
+        )}
+        <button onClick={() => setOpen(o => !o)} className={`${btn} bg-white border border-gray-300 text-gray-700 ml-auto`}>
+          {open ? 'Close' : 'Edit'}
+        </button>
+        <button onClick={copy} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+          {copied ? 'Copied' : 'Copy their link'}
+        </button>
+      </div>
+
+      {open && (
+        <div className="grid sm:grid-cols-2 gap-3 mt-3">
+          {([
+            ['payout_method', 'Wallet'], ['payout_number', 'Number'],
+            ['payout_name', 'Name on account'], ['agreed_rate', 'Agreed rate'],
+            ['phone', 'Phone'], ['telegram', 'Telegram'], ['email', 'Email'], ['note', 'Your note'],
+          ] as [keyof typeof form, string][]).map(([key, label]) => (
+            <div key={key}>
+              <label className="block text-xs text-gray-500 mb-1">{label}</label>
+              <input value={form[key]} onChange={e => set(key, e.target.value)} className={input} />
+            </div>
+          ))}
+          <div className="sm:col-span-2">
+            <button onClick={save} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
+              Save private details
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PayRequestCard({
+  row, name, wallet, onDone, onFlash,
+}: {
+  row: PaymentRequest & { teacher_id: string };
+  name: string;
+  wallet?: TeacherPrivateRow;
+  onDone: () => void;
+  onFlash: (m: string) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const pay = async () => {
+    setBusy(true);
+    let path = row.proof_file;
+    if (file) {
+      const up = await uploadPayoutProof(row.id, file);
+      if (!up.ok) { setBusy(false); onFlash(up.message); return; }
+      path = up.path;
+    }
+    await markRequestPaid(row.id, path, note);
+    setBusy(false);
+    onFlash(`${name} is marked paid. They can see your screenshot now.`);
+    onDone();
+  };
+
+  const refuse = async () => {
+    const why = prompt('What should the teacher be told?') ?? '';
+    await rejectRequest(row.id, why);
+    onDone();
+  };
+
+  return (
+    <div className={`p-4 rounded-xl border ${
+      row.status === 'requested' ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'
+    }`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold text-gray-900">
+            {name}
+            <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold ${
+              row.status === 'paid' ? 'bg-green-100 text-green-800'
+                : row.status === 'rejected' ? 'bg-red-100 text-red-800'
+                : 'bg-amber-100 text-amber-900'
+            }`}>
+              {row.status === 'paid' ? 'Paid' : row.status === 'rejected' ? 'Not approved' : 'Asking'}
+            </span>
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {row.period} · sent {new Date(row.created_at).toLocaleDateString('en-GB')}
+          </div>
+        </div>
+        <div className="text-xl font-bold text-gray-900">{money(row.amount)}</div>
+      </div>
+
+      {row.detail && <p className="text-sm text-gray-700 mt-3">{row.detail}</p>}
+
+      {/* where to send it — the whole point of this screen */}
+      <div className="mt-3 px-4 py-3 rounded-lg bg-gray-900 text-gray-100 text-sm">
+        {wallet?.payout_number ? (
+          <>
+            <div className="font-semibold">
+              {wallet.payout_method} · <span className="font-mono">{wallet.payout_number}</span>
+            </div>
+            <div className="text-gray-300 text-xs mt-0.5">
+              Account name: {wallet.payout_name || '—'}
+              {wallet.telegram && ` · Telegram ${wallet.telegram}`}
+              {wallet.agreed_rate && ` · agreed ${wallet.agreed_rate}`}
+            </div>
+          </>
+        ) : (
+          <span className="text-gray-300">
+            No payment details on file. Ask them to add them on their teacher page.
+          </span>
+        )}
+      </div>
+
+      {row.admin_note && <p className="text-xs text-gray-600 mt-2">Your note: {row.admin_note}</p>}
+
+      {row.status === 'paid' && row.proof_file && (
+        <a href={payoutProofUrl(row.proof_file)} target="_blank" rel="noopener noreferrer"
+          className="inline-block mt-3 text-sm font-semibold text-brand-700">
+          See the screenshot you sent →
+        </a>
+      )}
+
+      {row.status === 'requested' && (
+        <div className="mt-4 space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-400 cursor-pointer bg-white text-sm">
+              <span className="truncate">{file ? file.name : 'Your transfer screenshot'}</span>
+              <input type="file" accept="image/*,application/pdf" className="hidden"
+                onChange={e => setFile(e.target.files?.[0] ?? null)} />
+            </label>
+            <input value={note} onChange={e => setNote(e.target.value)}
+              placeholder="Message to the teacher (optional)" className={input} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={pay} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2`}>
+              <Check className="w-4 h-4" /> {busy ? 'Saving…' : 'Mark as paid'}
+            </button>
+            <button onClick={refuse} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+              Query it
+            </button>
+            <button onClick={async () => {
+              if (confirm('Delete this request?')) { await deleteRequest(row.id); onDone(); }
+            }} className={`${btn} text-red-600 hover:bg-red-50 ml-auto`}>Delete</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const statusStyle: Record<EnrolmentRow['status'], string> = {
   awaiting_payment: 'bg-gray-100 text-gray-700',

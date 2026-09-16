@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, ClipboardList, ExternalLink, RefreshCw, UserPlus } from 'lucide-react';
-import { forms, site } from '../data';
+import { forms, payment, site } from '../data';
 import { isLive, sendTeacherForm } from '../supabase';
 import { notify } from '../notify';
 
@@ -24,6 +24,7 @@ const guidance: Record<Mode, { title: string; lead: string; steps: string[] }> =
       'The courses and levels you can teach — General English, IELTS, and which levels',
       'The hours you are free each week, written one day per line',
       'What you would like to be paid per session',
+      'The wallet you want to be paid into — KBZPay, AYA Pay or CB Pay — and the name on it',
     ],
   },
   update: {
@@ -50,6 +51,9 @@ export default function TeacherPortal() {
   const [blurb, setBlurb] = useState('');
   const [availability, setAvailability] = useState('');
   const [feeRequest, setFeeRequest] = useState('');
+  const [payoutMethod, setPayoutMethod] = useState('');
+  const [payoutNumber, setPayoutNumber] = useState('');
+  const [payoutName, setPayoutName] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
@@ -66,6 +70,9 @@ export default function TeacherPortal() {
       kind: mode, name: name.trim(), phone: phone.trim(), email: email.trim(),
       telegram: telegram.trim(), courses: courses.trim(), blurb: blurb.trim(),
       availability_text: availability.trim(), fee_request: feeRequest.trim(),
+      payout_method: payoutMethod.trim(),
+      payout_number: payoutNumber.trim(),
+      payout_name: payoutName.trim(),
     });
     setSending(false);
     if (!res.ok) { setError(res.message); return; }
@@ -83,6 +90,7 @@ export default function TeacherPortal() {
         teaches: courses.trim(),
         hours: availability.trim(),
         asking_to_be_paid: feeRequest.trim(),
+        pay_into: [payoutMethod, payoutNumber, payoutName].filter(Boolean).join(' · '),
         action: 'Open your admin page, Teachers tab, to approve or reply.',
       },
     );
@@ -263,6 +271,37 @@ export default function TeacherPortal() {
                         <p className="text-xs text-gray-500 mt-1">
                           Private between you and us. Never shown on the website.
                         </p>
+                      </div>
+
+                      <div className="pt-4 border-t border-gray-100">
+                        <p className="text-sm font-semibold text-gray-900 mb-1">Where should we send your pay?</p>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Only we can see this. You can change it later on your own teacher page.
+                        </p>
+
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="t-wallet" className="block text-sm font-medium text-gray-700 mb-1">Wallet</label>
+                            <select id="t-wallet" value={payoutMethod}
+                              onChange={e => setPayoutMethod(e.target.value)} className={field}>
+                              <option value="">Choose…</option>
+                              {payment.methods.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                              <option value="Bank transfer">Bank transfer</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="t-wallet-no" className="block text-sm font-medium text-gray-700 mb-1">Number</label>
+                            <input id="t-wallet-no" value={payoutNumber} placeholder="09…"
+                              onChange={e => setPayoutNumber(e.target.value)} className={field} />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label htmlFor="t-wallet-name" className="block text-sm font-medium text-gray-700 mb-1">
+                              Name on the account
+                            </label>
+                            <input id="t-wallet-name" value={payoutName}
+                              onChange={e => setPayoutName(e.target.value)} className={field} />
+                          </div>
+                        </div>
                       </div>
                     </>
                   )}
