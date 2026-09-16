@@ -46,6 +46,20 @@ The booking page passes the answers to Jotform using each question's
 `forms.prefillKeys` in `src/data.ts`. If a name is wrong, Jotform just
 ignores it and the student types that answer themselves — nothing breaks.
 
+## Your admin page
+
+`your-site.netlify.app/#admin` — sign in and you can change the monthly group
+timetable, approve teachers who send in their hours, and approve student
+reviews, without touching GitHub at all.
+
+It needs a free Supabase database behind it. **See `SETUP-DATABASE.md`** for
+the one-time setup. Until you do that, the admin page says "not connected"
+and the website runs from `src/data.ts` as described below.
+
+Once it is connected, these move to the admin page: group classes, teachers,
+reviews. Everything else — one-to-one prices, payment numbers, contact
+details, FAQ — stays in `src/data.ts`.
+
 ## Changing the information on the site
 
 **Everything you can change lives in one file: `src/data.ts`.**
@@ -76,19 +90,17 @@ and revert it.
 
 ## Teachers updating their own details
 
-The **Teaching with Effortless Education** section at the bottom of the
-site sends teachers to your Jotform teacher registration form. Nothing
-they send appears on the website on its own — you approve it:
+The **Teaching with Effortless Education** section at the bottom of the site
+is a form teachers fill in themselves — their hours, what they teach, what
+they want to be paid.
 
-1. The form arrives in Jotform. Read it.
-2. Open `src/data.ts`, section 4, and copy an existing teacher block.
-3. Fill in their name, `levels`, `blurb` and `availability`.
-4. Set `status: "pending"` while you are still checking, or
-   `status: "live"` to put them in front of students.
-5. Commit. They are on the site in about a minute.
+With the database connected, it lands in your admin page under **Waiting for
+you**. You press *Add to the website*, tick their levels, and switch them to
+**Live**. Until you do, they are invisible: not in the teacher list, and not
+bookable.
 
-A teacher set to `"pending"` is invisible: not in the teacher list, and
-not bookable.
+Without the database, that section falls back to your Jotform teacher form
+and you add them by hand in section 4 of `src/data.ts`.
 
 **Their pay never goes in `src/data.ts`.** The teacher form asks for a
 fee per session — that is what *you pay them*, and it stays in Jotform.
@@ -98,14 +110,11 @@ accident.
 
 ## Student reviews
 
-`reviews` in `src/data.ts` holds them, and each one has an `approved`
-line. Set `approved: false` and it disappears from the site while you
-check it. The reviews section hides itself completely while no approved
-review exists.
+With the database connected, students leave a review at the bottom of the
+reviews section and it waits in your admin page until you publish it.
 
-To collect reviews with a form, make a short Jotform and paste its
-address into `forms.studentReview` in `src/data.ts`. A "Leave a review"
-button then appears under the reviews.
+Without the database, reviews live in `src/data.ts` and each has an
+`approved` line — set it to `false` to hide one while you check it.
 
 ## Running it on your own computer (optional)
 
