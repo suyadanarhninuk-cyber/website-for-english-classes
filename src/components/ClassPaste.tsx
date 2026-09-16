@@ -12,9 +12,12 @@ export interface ParsedClass {
   fee: number;
   startDate: string;      // yyyy-mm-dd, or ''
   seats: string;
+  hours: number | null;   // used by one-to-one courses
   month: string;          // yyyy-mm, taken from the start date
   problems: string[];
 }
+
+export type PasteMode = 'group' | 'levels' | 'video';
 
 const monthOf = (iso: string) => (iso ? iso.slice(0, 7) : '');
 
@@ -42,7 +45,7 @@ function parseFee(line: string): number | null {
   return value;
 }
 
-export function parseClasses(text: string): ParsedClass[] {
+export function parseClasses(text: string, mode: PasteMode = 'group'): ParsedClass[] {
   const blocks = text
     .split(/\n\s*\n/)
     .map(b => b.trim())
@@ -55,6 +58,7 @@ export function parseClasses(text: string): ParsedClass[] {
     let startDate = '';
     let weeks = '';
     let classSize = '';
+    let hours: number | null = null;
     let fee: number | null = null;
     const scheduleParts: string[] = [];
 
@@ -66,6 +70,11 @@ export function parseClasses(text: string): ParsedClass[] {
       if (/class\s*size|seats|places/i.test(line)) {
         const m = line.match(/(\d{1,3})/);
         if (m) classSize = m[1];
+        return;
+      }
+      if (/\bhours?\b/i.test(line) && /\d/.test(line)) {
+        const m = line.match(/(\d{1,3})/);
+        if (m) hours = Number(m[1]);
         return;
       }
       if (/weeks?\b/i.test(line) && /\d/.test(line)) {
@@ -89,8 +98,10 @@ export function parseClasses(text: string): ParsedClass[] {
     const problems: string[] = [];
     if (!name) problems.push('no course name');
     if (fee === null) problems.push('no fee');
-    if (!startDate) problems.push('no start date');
-    if (!schedule) problems.push('no days or times');
+    if (mode === 'group') {
+      if (!startDate) problems.push('no start date');
+      if (!schedule) problems.push('no days or times');
+    }
 
     return {
       name,
@@ -98,28 +109,53 @@ export function parseClasses(text: string): ParsedClass[] {
       fee: fee ?? 0,
       startDate,
       seats: classSize ? `Class size ${classSize}` : '',
+      hours,
       month: monthOf(startDate),
       problems,
     };
   });
 }
 
-const sample = `Intensive Preparation (Tr Mary)
+const samples: Record<PasteMode, string> = {
+  group: `Intensive Preparation (Tr Mary)
 Start Date - 5.10.26
 Mon to Fri (Sat) - 9 to 10:30 Pm
 4 Weeks
 Class Size - 12
-395000MMK`;
+395000MMK`,
+  levels: `Intermediate
+12 hours
+280000 MMK
+
+Upper-Intermediate
+12 hours
+330000 MMK`,
+  video: `IELTS Writing Masterclass
+12 videos
+150000 MMK
+Task 1 and Task 2 from the ground up
+
+Grammar for Writing
+8 videos
+100000 MMK`,
+};
+
+const wording: Record<PasteMode, string> = {
+  group: 'Paste a list of classes',
+  levels: 'Paste a list of courses',
+  video: 'Paste a list of video courses',
+};
 
 export default function ClassPaste({
-  onAdd, busy,
+  onAdd, busy, mode = 'group',
 }: {
   onAdd: (rows: ParsedClass[]) => void;
   busy: boolean;
+  mode?: PasteMode;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
-  const parsed = text.trim() ? parseClasses(text) : [];
+  const parsed = text.trim() ? parseClasses(text, mode) : [];
   const usable = parsed.filter(p => p.name && p.fee > 0);
 
   const monthLabels = Array.from(new Set(usable.map(p => p.month).filter(Boolean)))
@@ -130,7 +166,7 @@ export default function ClassPaste({
     return (
       <button type="button" onClick={() => setOpen(true)}
         className="px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-gray-300 text-gray-700 flex items-center gap-2">
-        <ClipboardPaste className="w-4 h-4" /> Paste a list of classes
+        <ClipboardPaste className="w-4 h-4" /> {wording[mode]}
       </button>
     );
   }
@@ -139,7 +175,7 @@ export default function ClassPaste({
     <div className="w-full p-5 rounded-2xl border-2 border-gray-300 bg-gray-50">
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
-          <h3 className="font-bold text-gray-900">Paste your classes</h3>
+          <h3 className="font-bold text-gray-900">{wording[mode]}</h3>
           <p className="text-sm text-gray-600 mt-0.5">
             Write them the way you always do. Leave an empty line between each course.
             Nothing is saved until you press the button at the bottom.
@@ -152,14 +188,14 @@ export default function ClassPaste({
       </div>
 
       <textarea rows={10} value={text} onChange={e => setText(e.target.value)}
-        placeholder={sample}
+        placeholder={samples[mode]}
         className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-sm font-mono resize-y outline-none focus:ring-2 focus:ring-brand-600" />
 
       {parsed.length > 0 && (
         <div className="mt-4">
           <div className="text-sm font-bold text-gray-900 mb-2">
-            {usable.length} class{usable.length === 1 ? '' : 'es'} understood
-            {monthLabels.length > 0 && ` · ${monthLabels.join(', ')}`}
+            {usable.length} {usable.length === 1 ? 'course' : 'courses'} understood
+            {mode === 'group' && monthLabels.length > 0 && ` · ${monthLabels.join(', ')}`}
           </div>
 
           <div className="space-y-2">
@@ -174,7 +210,7 @@ export default function ClassPaste({
                   </span>
                 </div>
                 <div className="text-xs text-gray-600 mt-1">
-                  {p.schedule || 'no days or times'}
+                  {p.schedule || (p.hours ? `${p.hours} hours` : 'no days or times')}
                   {p.startDate && ` · starts ${new Date(p.startDate).toLocaleDateString('en-GB', {
                     day: 'numeric', month: 'short', year: 'numeric',
                   })}`}
@@ -191,13 +227,15 @@ export default function ClassPaste({
           </div>
 
           <p className="text-xs text-gray-500 mt-3">
-            Each class is filed under the month its start date falls in. Fees are read as {site.currency}.
+            {mode === 'group'
+              ? `Each class is filed under the month its start date falls in. Fees are read as ${site.currency}.`
+              : `Fees are read as ${site.currency}. Anything it misses you can fill in by hand after.`}
           </p>
 
           <button type="button" disabled={busy || usable.length === 0}
             onClick={() => { onAdd(usable); setText(''); setOpen(false); }}
             className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-50">
-            {busy ? 'Adding…' : `Add ${usable.length} class${usable.length === 1 ? '' : 'es'}`}
+            {busy ? 'Adding…' : `Add ${usable.length} ${usable.length === 1 ? 'course' : 'courses'}`}
           </button>
         </div>
       )}

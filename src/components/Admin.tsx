@@ -222,11 +222,33 @@ export default function Admin() {
     hours: 12, description: '', visible: true, sort_order: prev.length + 1,
   }]);
 
+  const addPastedLevels = async (rows: ParsedClass[]) => {
+    setBusy(true);
+    let n = 0;
+    for (const r of rows) {
+      const res = await saveLevel({
+        id: r.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30),
+        course: /ielts/i.test(r.name) ? 'ielts' : 'general',
+        name: r.name.trim(),
+        fee: r.fee,
+        hours: r.hours,
+        description: '',
+        visible: true,
+        sort_order: 50 + n,
+      });
+      if (res.error) { setBusy(false); flash(`Not saved — ${res.error.message}`); return; }
+      n += 1;
+    }
+    await refresh();
+    setBusy(false);
+    flash(`${n} course${n === 1 ? '' : 's'} added. Check them below.`);
+  };
+
   const saveLevels = async () => {
     setBusy(true);
     for (const l of levels) {
       if (!l.name.trim()) continue;
-      await saveLevel({
+      const res = await saveLevel({
         id: l.id.startsWith('new-')
           ? l.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)
           : l.id,
@@ -234,6 +256,7 @@ export default function Admin() {
         hours: l.hours === null || Number.isNaN(Number(l.hours)) ? null : Number(l.hours),
         description: l.description, visible: l.visible, sort_order: l.sort_order,
       });
+      if (res.error) { setBusy(false); flash(`Not saved — ${res.error.message}`); return; }
     }
     await refresh();
     setBusy(false);
@@ -253,7 +276,7 @@ export default function Admin() {
     let n = 0;
     for (const r of rows) {
       const target = r.month || month;
-      await saveGroupClass({
+      const res = await saveGroupClass({
         month: target,
         name: r.name,
         fee: r.fee,
@@ -263,6 +286,7 @@ export default function Admin() {
         visible: true,
         sort_order: 50 + n,
       });
+      if (res.error) { setBusy(false); flash(`Not saved — ${res.error.message}`); return; }
       n += 1;
     }
     await refresh();
@@ -274,6 +298,8 @@ export default function Admin() {
 
   const saveClasses = async () => {
     setBusy(true);
+    let saved = 0;
+    let failure = '';
     for (const c of monthClasses) {
       if (!c.name.trim()) continue;
       const row: Partial<GroupClassRow> = {
@@ -282,11 +308,15 @@ export default function Admin() {
         seats: c.seats, visible: c.visible, sort_order: c.sort_order,
       };
       if (!c.id.startsWith('new-')) row.id = c.id;
-      await saveGroupClass(row);
+      const res = await saveGroupClass(row);
+      if (res.error) failure = failure || `${c.name}: ${res.error.message}`;
+      else saved += 1;
     }
     await refresh();
     setBusy(false);
-    flash('Saved. Students can see it now.');
+    if (failure) flash(`Not saved — ${failure}`);
+    else if (saved === 0) flash('Nothing to save. Add a class first, and give it a name.');
+    else flash(`${saved} class${saved === 1 ? '' : 'es'} saved. Students can see them now.`);
   };
 
   const removeClass = async (c: GroupClassRow) => {
@@ -379,6 +409,28 @@ export default function Admin() {
     level: '', access_note: '', visible: true, sort_order: prev.length + 1,
   }]);
 
+  const addPastedVideos = async (rows: ParsedClass[]) => {
+    setBusy(true);
+    let n = 0;
+    for (const r of rows) {
+      const res = await saveVideoCourse({
+        title: r.name.trim(),
+        summary: '',
+        fee: r.fee,
+        lessons: r.schedule || (r.hours ? `${r.hours} hours` : ''),
+        level: '',
+        access_note: '',
+        visible: true,
+        sort_order: 50 + n,
+      });
+      if (res.error) { setBusy(false); flash(`Not saved — ${res.error.message}`); return; }
+      n += 1;
+    }
+    await refresh();
+    setBusy(false);
+    flash(`${n} video course${n === 1 ? '' : 's'} added. Add the Telegram link to each one below.`);
+  };
+
   const saveVideos = async () => {
     setBusy(true);
     for (const v of videos) {
@@ -389,7 +441,8 @@ export default function Admin() {
         visible: v.visible, sort_order: v.sort_order,
       };
       if (!v.id.startsWith('new-')) row.id = v.id;
-      await saveVideoCourse(row);
+      const res = await saveVideoCourse(row);
+      if (res.error) { setBusy(false); flash(`Not saved — ${res.error.message}`); return; }
     }
     await refresh();
     setBusy(false);
@@ -492,6 +545,10 @@ export default function Admin() {
               <button onClick={saveLevels} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
                 {busy ? 'Saving…' : 'Save courses'}
               </button>
+            </div>
+
+            <div className="mb-5">
+              <ClassPaste mode="levels" onAdd={addPastedLevels} busy={busy} />
             </div>
 
             <div className="space-y-3">
@@ -899,6 +956,10 @@ export default function Admin() {
               Recorded courses students buy once. They appear on the website and in the booking
               form. Untick <em>Show</em> to hide one without deleting it.
             </p>
+
+            <div className="mb-5">
+              <ClassPaste mode="video" onAdd={addPastedVideos} busy={busy} />
+            </div>
 
             <div className="space-y-3">
               {videos.map(v => (
