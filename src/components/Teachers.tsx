@@ -1,5 +1,5 @@
-import React from 'react';
-import { CalendarClock, PlayCircle, Video } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { CalendarClock, PlayCircle, Search, Video } from 'lucide-react';
 import { oneToOneLevels, site } from '../data';
 import { useContent } from '../content';
 import { teacherPhotoUrl } from '../supabase';
@@ -17,7 +17,26 @@ function bookWith(name: string) {
 
 export default function Teachers() {
   const { teachers } = useContent();
+
+  const [who, setWho] = useState('');     // a teacher's name
+  const [what, setWhat] = useState('');   // a level or course id
+
+  /* Only offer levels somebody actually teaches, so the list can never
+     lead a student to an empty result. */
+  const levelsOffered = useMemo(() => {
+    const ids = new Set<string>();
+    teachers.forEach(t => t.levels.forEach(l => ids.add(l)));
+    return oneToOneLevels.filter(l => ids.has(l.id));
+  }, [teachers]);
+
+  const shown = useMemo(() => teachers.filter(t =>
+    (!who || t.name === who) && (!what || t.levels.includes(what))
+  ), [teachers, who, what]);
+
   if (teachers.length === 0) return null;
+
+  const select =
+    'px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium text-gray-800 outline-none focus:ring-2 focus:ring-brand-600';
 
   return (
     <section id="teachers" className="scroll-mt-20 py-24 bg-white no-print">
@@ -32,8 +51,38 @@ export default function Teachers() {
           </p>
         </div>
 
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
+          <span className="flex items-center gap-2 text-sm text-gray-500">
+            <Search className="w-4 h-4" /> Find a teacher
+          </span>
+
+          <select aria-label="Teacher" value={who} onChange={e => setWho(e.target.value)} className={select}>
+            <option value="">Any teacher</option>
+            {teachers.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+          </select>
+
+          <select aria-label="Course" value={what} onChange={e => setWhat(e.target.value)} className={select}>
+            <option value="">Any course</option>
+            {levelsOffered.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+
+          {(who || what) && (
+            <button type="button" onClick={() => { setWho(''); setWhat(''); }}
+              className="text-sm font-semibold text-brand-700 hover:text-brand-800">
+              Clear
+            </button>
+          )}
+        </div>
+
+        {shown.length === 0 && (
+          <p className="text-center text-gray-600 py-10">
+            Nobody teaches that combination at the moment. Clear the boxes above to see everyone,
+            or message us and we will find someone for you.
+          </p>
+        )}
+
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {teachers.map(t => (
+          {shown.map(t => (
             <div key={t.name} className="rounded-2xl border border-gray-200 p-6 flex flex-col">
               <div className="flex items-center gap-4">
                 {t.photo ? (
