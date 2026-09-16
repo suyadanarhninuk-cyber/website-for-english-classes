@@ -1,24 +1,21 @@
 /* Talks to your Supabase database.
 
-   The two values below come from Supabase → Project Settings → API.
-   They are safe to be public: the "anon" key can only do what the
+   Your two keys live in src/config.ts, which no update ever replaces.
+   They are safe to be public: the publishable key can only do what the
    security rules in supabase/schema.sql allow, which is read published
-   classes and send you a teacher form or a review. Everything else
-   needs your login.
+   classes and send you a form. Everything else needs your login.
 
-   Leave them empty and the website simply uses src/data.ts instead,
-   exactly as it did before. */
+   Leave config.ts empty and the website quietly uses src/data.ts
+   instead, exactly as it did before there was a database. */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Availability, Teacher } from './data';
+import { SUPABASE_KEY, SUPABASE_URL } from './config';
 
-export const SUPABASE_URL = '';       // e.g. https://abcdefgh.supabase.co
-export const SUPABASE_ANON_KEY = '';  // the long "anon public" key
-
-export const isLive = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+export const isLive = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
 export const supabase: SupabaseClient | null = isLive
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  ? createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: true, autoRefreshToken: true },
     })
   : null;
