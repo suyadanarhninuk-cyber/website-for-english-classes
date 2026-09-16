@@ -5,9 +5,9 @@ import { oneToOneLevels, site, generalEnglishNote, payment } from '../data';
 import { monthLabel, thisMonth, useContent } from '../content';
 
 export default function Services() {
-  const { groupClasses, months } = useContent();
-  const generalEnglish = oneToOneLevels.filter(l => l.course === 'general');
-  const ieltsOneToOne = oneToOneLevels.filter(l => l.course === 'ielts');
+  const { groupClasses, months, levels } = useContent();
+  const generalEnglish = levels.filter(l => l.course === 'general');
+  const ieltsOneToOne = levels.filter(l => l.course === 'ielts');
 
   /* When the database holds monthly timetables, show this month first —
      or the next month that has classes in it. */

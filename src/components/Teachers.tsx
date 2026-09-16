@@ -7,8 +7,7 @@ import { teacherPhotoUrl } from '../supabase';
 const initials = (name: string) =>
   name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
-const levelName = (id: string) =>
-  oneToOneLevels.find(l => l.id === id)?.name ?? id;
+
 
 function bookWith(name: string) {
   window.dispatchEvent(new CustomEvent('ee:select-teacher', { detail: { name } }));
@@ -16,7 +15,9 @@ function bookWith(name: string) {
 }
 
 export default function Teachers() {
-  const { teachers } = useContent();
+  const { teachers, levels } = useContent();
+
+  const levelName = (id: string) => levels.find(l => l.id === id)?.name ?? id;
 
   const [who, setWho] = useState('');     // a teacher's name
   const [what, setWhat] = useState('');   // a level or course id

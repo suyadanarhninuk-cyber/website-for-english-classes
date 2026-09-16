@@ -18,6 +18,7 @@ import {
 } from '../supabase';
 import { money, receiptLink } from '../contact';
 import ClassPaste, { ParsedClass } from './ClassPaste';
+import { LevelRow, adminLoadLevels, deleteLevel, saveLevel } from '../supabase';
 
 const teacherLink = (token: string) =>
   `${window.location.origin}${window.location.pathname}#teacher/${token}`;
@@ -31,7 +32,7 @@ import { Availability } from '../data';
    database are what enforce that — not this page. Even if someone opened
    this screen, without your login the database refuses every change. */
 
-type Tab = 'enrolments' | 'classes' | 'video' | 'teachers' | 'payments' | 'vouchers' | 'reviews';
+type Tab = 'enrolments' | 'levels' | 'classes' | 'video' | 'teachers' | 'payments' | 'vouchers' | 'reviews';
 
 const input =
   'w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none';
@@ -68,6 +69,7 @@ export default function Admin() {
   const [tab, setTab] = useState<Tab>('enrolments');
   const [enrolments, setEnrolments] = useState<EnrolmentRow[]>([]);
   const [requests, setRequests] = useState<(PaymentRequest & { teacher_id: string })[]>([]);
+  const [levels, setLevels] = useState<LevelRow[]>([]);
   const [privates, setPrivates] = useState<TeacherPrivateRow[]>([]);
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [attempts, setAttempts] = useState<VoucherAttempt[]>([]);
@@ -99,6 +101,7 @@ export default function Admin() {
     ]);
     setEnrolments(bookings);
     setRequests(pay.requests);
+    setLevels(await adminLoadLevels());
     setPrivates(pay.privates);
     setVouchers(vouch.vouchers);
     setAttempts(vouch.attempts);
@@ -209,6 +212,38 @@ export default function Admin() {
     }));
     setClasses(prev2 => [...prev2, ...copies]);
     flash(`Copied ${source.length} classes from ${monthLabel(prev)}. Check the dates, then save.`);
+  };
+
+  const editLevel = (id: string, patch: Partial<LevelRow>) =>
+    setLevels(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
+
+  const addLevel = () => setLevels(prev => [...prev, {
+    id: `new-${Date.now()}`, course: 'general', name: '', fee: 0,
+    hours: 12, description: '', visible: true, sort_order: prev.length + 1,
+  }]);
+
+  const saveLevels = async () => {
+    setBusy(true);
+    for (const l of levels) {
+      if (!l.name.trim()) continue;
+      await saveLevel({
+        id: l.id.startsWith('new-')
+          ? l.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)
+          : l.id,
+        course: l.course, name: l.name.trim(), fee: Number(l.fee) || 0,
+        hours: l.hours === null || Number.isNaN(Number(l.hours)) ? null : Number(l.hours),
+        description: l.description, visible: l.visible, sort_order: l.sort_order,
+      });
+    }
+    await refresh();
+    setBusy(false);
+    flash('Saved. The pricing card and the booking form both show this now.');
+  };
+
+  const removeLevel = async (l: LevelRow) => {
+    if (!confirm(`Remove ${l.name || 'this course'}? Teachers linked to it keep their other levels.`)) return;
+    if (!l.id.startsWith('new-')) await deleteLevel(l.id);
+    setLevels(prev => prev.filter(x => x.id !== l.id));
   };
 
   /* Classes pasted in as text. Each one is filed under the month of its
@@ -365,6 +400,7 @@ export default function Admin() {
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'enrolments', label: 'Enrolments', count: waitingPayments.length },
+    { id: 'levels', label: 'One-to-one courses' },
     { id: 'classes', label: 'Group classes' },
     { id: 'video', label: 'Video courses' },
     { id: 'teachers', label: 'Teachers', count: waiting.length + photosWaiting },
@@ -435,6 +471,81 @@ export default function Admin() {
                     }
                   }} />
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* ONE-TO-ONE COURSES */}
+        {tab === 'levels' && (
+          <section className="bg-white rounded-2xl border border-gray-200 p-5">
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-gray-900">One-to-one courses</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Your levels and what a student pays for each. Changes show on the pricing
+                  card and in the booking form as soon as you save.
+                </p>
+              </div>
+              <button onClick={addLevel} className={`${btn} bg-white border border-gray-300 text-gray-700 flex items-center gap-2 ml-auto`}>
+                <Plus className="w-4 h-4" /> Add a course
+              </button>
+              <button onClick={saveLevels} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
+                {busy ? 'Saving…' : 'Save courses'}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {levels.map(l => (
+                <div key={l.id} className="grid md:grid-cols-12 gap-3 items-end p-3 rounded-xl border border-gray-200">
+                  <div className="md:col-span-4">
+                    <label className="block text-xs text-gray-500 mb-1">Course name</label>
+                    <input value={l.name} onChange={e => editLevel(l.id, { name: e.target.value })}
+                      placeholder="Intermediate" className={input} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Type</label>
+                    <select value={l.course} onChange={e => editLevel(l.id, { course: e.target.value as 'general' | 'ielts' })}
+                      className={input}>
+                      <option value="general">General English</option>
+                      <option value="ielts">IELTS</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Fee ({site.currency})</label>
+                    <input type="number" value={l.fee}
+                      onChange={e => editLevel(l.id, { fee: Number(e.target.value) })} className={input} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Hours</label>
+                    <input type="number" value={l.hours ?? ''} placeholder="leave empty"
+                      onChange={e => editLevel(l.id, {
+                        hours: e.target.value === '' ? null : Number(e.target.value),
+                      })} className={input} />
+                  </div>
+                  <div className="md:col-span-2 flex items-center gap-2 pb-2">
+                    <label className="flex items-center gap-1 text-xs text-gray-600">
+                      <input type="checkbox" checked={l.visible}
+                        onChange={e => editLevel(l.id, { visible: e.target.checked })} />
+                      Show
+                    </label>
+                    <button onClick={() => removeLevel(l)} className="text-gray-400 hover:text-red-600">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="md:col-span-12">
+                    <input value={l.description}
+                      onChange={e => editLevel(l.id, { description: e.target.value })}
+                      placeholder="Optional line shown under the course name — used on the IELTS card"
+                      className={`${input} text-xs`} />
+                  </div>
+                </div>
+              ))}
+
+              {levels.length === 0 && (
+                <p className="text-sm text-gray-500 py-8 text-center">
+                  No courses yet. If this is unexpected, run schema-9-course-levels.sql in Supabase.
+                </p>
+              )}
             </div>
           </section>
         )}

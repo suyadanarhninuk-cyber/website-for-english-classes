@@ -30,7 +30,7 @@ import PaymentPanel, { PaymentDetails } from './PaymentPanel';
 type BookingMode = 'one-to-one' | 'group' | 'video' | null;
 
 export default function BookingSection() {
-  const { teachers, groupClasses, months, videoCourses } = useContent();
+  const { teachers, groupClasses, months, videoCourses , levels } = useContent();
 
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<BookingMode>(null);
@@ -119,7 +119,7 @@ export default function BookingSection() {
   const slots = useMemo(() => (teacher ? expandSlots(teacher) : []), [teacher]);
   const chosenSlots = slotIdxs.map(i => slots[i]).filter(Boolean).map(slotLabel);
 
-  const levelObj = oneToOneLevels.find(l => l.id === levelId);
+  const levelObj = levels.find(l => l.id === levelId);
   const groupObj = bookableGroup.find(g => g.name === groupCourse);
   const videoObj = videoCourses.find(v => v.title === videoCourse);
 
@@ -411,7 +411,7 @@ export default function BookingSection() {
 
                 {mode === 'one-to-one' && (
                   <div className="space-y-2 flex-grow">
-                    {oneToOneLevels.map(l => (
+                    {levels.map(l => (
                       <button key={l.id} type="button" onClick={() => chooseLevel(l.id)}
                         className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
                           levelId === l.id ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
