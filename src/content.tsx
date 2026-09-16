@@ -1,12 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
+  oneToOneLevels as fileLevels,
+  LevelInfo,
   teachers as fileTeachers,
   groupCourses as fileGroupCourses,
   reviews as fileReviews,
   Teacher,
 } from './data';
 import {
-  GroupClassRow, VideoCourseRow, isLive, loadPublicContent, loadVideoCourses, ReviewRow,
+  GroupClassRow, VideoCourseRow, isLive, loadLevels, loadPublicContent, loadVideoCourses,
+  ReviewRow,
 } from './supabase';
 
 /* Everything the public pages show, from the database when it is
@@ -26,6 +29,7 @@ interface Content {
   teachers: Teacher[];
   groupClasses: GroupClassRow[];
   months: string[];
+  levels: LevelInfo[];
   reviews: PublicReview[];
   videoCourses: VideoCourseRow[];
 }
@@ -62,6 +66,7 @@ const fallback: Content = {
   teachers: fileTeachers.filter(t => t.status !== 'pending'),
   groupClasses: fallbackGroupClasses(),
   months: [],
+  levels: fileLevels,
   reviews: fileReviews.filter(r => r.approved !== false),
   videoCourses: [],
 };
@@ -77,26 +82,35 @@ export function ContentProvider({ children }: { children: React.ReactNode }) {
     if (!isLive) return;
     let cancelled = false;
 
-    Promise.all([loadPublicContent(), loadVideoCourses()]).then(([data, videos]) => {
-      if (cancelled) return;
-      if (!data) {
-        setContent({ ...fallback, videoCourses: videos });
-        return;
-      }
+    Promise.all([loadPublicContent(), loadVideoCourses(), loadLevels()])
+      .then(([data, videos, levels]) => {
+        if (cancelled) return;
 
-      const months = Array.from(new Set(data.groupClasses.map(g => g.month))).sort();
-      setContent({
-        videoCourses: videos,
-        loading: false,
-        fromDatabase: true,
-        teachers: data.teachers.length ? data.teachers : fallback.teachers,
-        groupClasses: data.groupClasses.length ? data.groupClasses : fallback.groupClasses,
-        months: data.groupClasses.length ? months : [],
-        reviews: (data.reviews as ReviewRow[]).map(r => ({
-          quote: r.quote, name: r.name, course: r.course, rating: r.rating,
-        })),
+        const fromDb: LevelInfo[] | null = levels && levels.map(r => ({
+          id: r.id, course: r.course, name: r.name, fee: r.fee,
+          hours: r.hours, description: r.description || undefined,
+        }));
+
+        if (!data) {
+          setContent({ ...fallback, videoCourses: videos, levels: fromDb ?? fallback.levels });
+          return;
+        }
+
+        const months: string[] =
+          Array.from(new Set(data.groupClasses.map(g => g.month))).sort();
+        setContent({
+          videoCourses: videos,
+          loading: false,
+          fromDatabase: true,
+          levels: fromDb ?? fallback.levels,
+          teachers: data.teachers.length ? data.teachers : fallback.teachers,
+          groupClasses: data.groupClasses.length ? data.groupClasses : fallback.groupClasses,
+          months: data.groupClasses.length ? months : [],
+          reviews: (data.reviews as ReviewRow[]).map(r => ({
+            quote: r.quote, name: r.name, course: r.course, rating: r.rating,
+          })),
+        });
       });
-    });
 
     return () => { cancelled = true; };
   }, []);

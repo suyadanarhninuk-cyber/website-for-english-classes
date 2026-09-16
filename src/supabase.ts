@@ -633,3 +633,38 @@ export function setEnrolmentAccess(id: string, url: string, note: string) {
   return supabase!.from('enrolments')
     .update({ access_url: url, access_note: note }).eq('id', id);
 }
+
+/* ── one-to-one course levels ──────────────────────────────────────── */
+
+export interface LevelRow {
+  id: string;
+  course: 'general' | 'ielts';
+  name: string;
+  fee: number;
+  hours: number | null;
+  description: string;
+  visible: boolean;
+  sort_order: number;
+}
+
+export async function loadLevels(): Promise<LevelRow[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('course_levels').select('*')
+    .eq('visible', true).order('sort_order', { ascending: true });
+  if (error || !data || data.length === 0) return null;
+  return data as LevelRow[];
+}
+
+export async function adminLoadLevels(): Promise<LevelRow[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from('course_levels').select('*')
+    .order('sort_order', { ascending: true });
+  return (data ?? []) as LevelRow[];
+}
+
+export const saveLevel = (row: Partial<LevelRow>) =>
+  supabase!.from('course_levels')
+    .upsert({ ...row, updated_at: new Date().toISOString() }).select();
+
+export const deleteLevel = (id: string) =>
+  supabase!.from('course_levels').delete().eq('id', id);
