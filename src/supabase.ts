@@ -37,6 +37,12 @@ export interface GroupClassRow {
 export interface TeacherRow {
   id: string;
   token: string;
+  photo: string;
+  qualifications: string[];
+  demo_url: string;
+  teaches_video: boolean;
+  photo_pending: string;
+  photo_consent: boolean;
   name: string;
   course: 'general' | 'ielts';
   levels: string[];
@@ -58,6 +64,9 @@ export interface SubmissionRow {
   blurb: string;
   availability_text: string;
   fee_request: string;
+  qualifications: string;
+  demo_url: string;
+  teaches_video: boolean;
   payout_method: string;
   payout_number: string;
   payout_name: string;
@@ -79,6 +88,9 @@ export interface ReviewRow {
  *  the rest of the site does not care where a teacher came from. */
 export const rowToTeacher = (r: TeacherRow): Teacher => ({
   name: r.name,
+  photo: r.photo || '',
+  qualifications: r.qualifications ?? [],
+  demoUrl: r.demo_url ?? '',
   course: r.course,
   levels: r.levels ?? [],
   platform: r.platform || 'Zoom',
@@ -123,6 +135,9 @@ export async function sendTeacherForm(input: {
   blurb: string;
   availability_text: string;
   fee_request: string;
+  qualifications: string;
+  demo_url: string;
+  teaches_video?: boolean;
   payout_method?: string;
   payout_number?: string;
   payout_name?: string;
@@ -198,6 +213,9 @@ export interface EnrolmentRow {
   id: string;
   reference: string;
   token: string;
+  voucher_code: string;
+  discount_percent: number;
+  full_fee: number;
   first_name: string;
   last_name: string;
   phone: string;
@@ -217,6 +235,8 @@ export interface EnrolmentRow {
   payment_file: string;
   status: 'awaiting_payment' | 'checking' | 'confirmed' | 'rejected';
   admin_note: string;
+  access_url: string;
+  access_note: string;
   created_at: string;
   paid_at: string | null;
   confirmed_at: string | null;
@@ -232,6 +252,7 @@ export async function createEnrolment(row: {
   teacher: string; slots: string[]; start_date: string | null; fee: number;
   payment_method: string; payment_last6: string; payment_file: string;
   status: 'awaiting_payment' | 'checking';
+  voucher_code?: string; discount_percent?: number; full_fee?: number;
 }) {
   if (!supabase) return { ok: false, message: 'Bookings are not connected yet.' };
   const { error } = await supabase.from('enrolments').insert(row);
@@ -315,6 +336,11 @@ export interface PaymentRequest {
 
 export interface TeacherHome {
   name: string;
+  teaches_video?: boolean;
+  demo_url?: string;
+  photo: string;
+  photo_pending: string;
+  photo_consent: boolean;
   status: 'pending' | 'live';
   course: string;
   levels: string[];
@@ -432,4 +458,178 @@ export const deleteRequest = (id: string) =>
 export function saveTeacherPrivate(row: Partial<TeacherPrivateRow> & { teacher_id: string }) {
   return supabase!.from('teacher_private')
     .upsert({ ...row, updated_at: new Date().toISOString() });
+}
+
+/* ── teacher photos ────────────────────────────────────────────────── */
+
+export function teacherPhotoUrl(path: string) {
+  if (!supabase || !path) return '';
+  return supabase.storage.from('teacher-photos').getPublicUrl(path).data.publicUrl;
+}
+
+export async function uploadTeacherPhoto(token: string, file: File) {
+  if (!supabase) return { ok: false, path: '', message: 'Not connected.' };
+  const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().slice(0, 5);
+  const path = `${token}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from('teacher-photos').upload(path, file);
+  return error ? { ok: false, path: '', message: error.message } : { ok: true, path, message: '' };
+}
+
+export async function teacherSetPhoto(token: string, path: string, consent: boolean) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_set_photo', {
+    p_token: token, p_path: path, p_consent: consent,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data ? { ok: true, message: '' } : { ok: false, message: 'We could not find your record.' };
+}
+
+export const approveTeacherPhoto = (id: string, path: string) =>
+  supabase!.from('teachers').update({ photo: path, photo_pending: '' }).eq('id', id);
+
+export const rejectTeacherPhoto = (id: string) =>
+  supabase!.from('teachers').update({ photo_pending: '' }).eq('id', id);
+
+export const removeTeacherPhoto = (id: string) =>
+  supabase!.from('teachers').update({ photo: '', photo_pending: '' }).eq('id', id);
+
+/* ── returning student vouchers ────────────────────────────────────── */
+
+export interface VoucherRow {
+  id: string;
+  code: string;
+  percent: number;
+  student_name: string;
+  phone: string;
+  telegram: string;
+  proof_file: string;
+  status: 'unused' | 'used' | 'cancelled';
+  used_reference: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+}
+
+export interface VoucherAttempt {
+  id: string;
+  code_tried: string;
+  reason: string;
+  created_at: string;
+}
+
+export async function uploadVoucherProof(phone: string, file: File) {
+  if (!supabase) return { ok: false, path: '', message: 'Not connected.' };
+  const clean = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_').slice(-50);
+  const path = `${phone.replace(/\D/g, '') || 'x'}/${Date.now()}-${clean}`;
+  const { error } = await supabase.storage.from('voucher-proof').upload(path, file);
+  return error ? { ok: false, path: '', message: error.message } : { ok: true, path, message: '' };
+}
+
+/** The draw. The result is decided inside the database, not here. */
+export async function claimVoucher(
+  name: string, phone: string, telegram: string, proof: string,
+) {
+  if (!supabase) return { ok: false, message: 'Not connected yet.' } as const;
+  const { data, error } = await supabase.rpc('claim_voucher', {
+    p_name: name, p_phone: phone, p_telegram: telegram, p_proof: proof,
+  });
+  if (error) return { ok: false, message: error.message } as const;
+  return data as {
+    ok: boolean; code?: string; percent?: number; expires_at?: string;
+    again?: boolean; message?: string;
+  };
+}
+
+export async function checkVoucher(code: string) {
+  if (!supabase) return { valid: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('check_voucher', { p_code: code });
+  if (error) return { valid: false, message: error.message };
+  return data as { valid: boolean; percent?: number; code?: string; message?: string };
+}
+
+export async function redeemVoucher(code: string, reference: string) {
+  if (!supabase) return false;
+  const { data } = await supabase.rpc('redeem_voucher', { p_code: code, p_reference: reference });
+  return Boolean(data);
+}
+
+export async function adminLoadVouchers() {
+  if (!supabase) return { vouchers: [], attempts: [] };
+  const [v, a] = await Promise.all([
+    supabase.from('vouchers').select('*').order('created_at', { ascending: false }).limit(300),
+    supabase.from('voucher_attempts').select('*').order('created_at', { ascending: false }).limit(100),
+  ]);
+  return {
+    vouchers: (v.data ?? []) as VoucherRow[],
+    attempts: (a.data ?? []) as VoucherAttempt[],
+  };
+}
+
+export const cancelVoucher = (id: string) =>
+  supabase!.from('vouchers').update({ status: 'cancelled' }).eq('id', id);
+
+export async function voucherProofUrl(path: string) {
+  if (!supabase || !path) return '';
+  const { data } = await supabase.storage.from('voucher-proof').createSignedUrl(path, 3600);
+  return data?.signedUrl ?? '';
+}
+
+/* ── video courses ─────────────────────────────────────────────────── */
+
+export interface VideoCourseRow {
+  id: string;
+  title: string;
+  summary: string;
+  fee: number;
+  lessons: string;
+  level: string;
+  access_note: string;
+  visible: boolean;
+  sort_order: number;
+}
+
+export async function loadVideoCourses() {
+  if (!supabase) return [];
+  const { data } = await supabase.from('video_courses').select('*')
+    .eq('visible', true).order('sort_order', { ascending: true });
+  return (data ?? []) as VideoCourseRow[];
+}
+
+export async function adminLoadVideoCourses() {
+  if (!supabase) return [];
+  const { data } = await supabase.from('video_courses').select('*')
+    .order('sort_order', { ascending: true });
+  return (data ?? []) as VideoCourseRow[];
+}
+
+export const saveVideoCourse = (row: Partial<VideoCourseRow>) =>
+  supabase!.from('video_courses').upsert({ ...row, updated_at: new Date().toISOString() }).select();
+
+export const deleteVideoCourse = (id: string) =>
+  supabase!.from('video_courses').delete().eq('id', id);
+
+/** A Telegram address, and nothing else. The database refuses anything
+ *  that is not one; this lets the teacher see why before they send it. */
+export const isTelegramLink = (url: string) =>
+  /^https:\/\/(t\.me|telegram\.me)\/[A-Za-z0-9_+/-]+$/i.test(url.trim());
+
+/* ── recorded video classes ────────────────────────────────────────── */
+
+/** A teacher offering to record, or withdrawing the offer. It arrives in
+ *  your approval queue like any other change. */
+export async function teacherSetVideo(token: string, wants: boolean, demo: string) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_set_video', {
+    p_token: token, p_wants: wants, p_demo: demo,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data
+    ? { ok: true, message: '' }
+    : { ok: false, message: 'The demo must be a Telegram link, starting https://t.me/' };
+}
+
+/** The link you hand a student once their payment is confirmed. */
+export function setEnrolmentAccess(id: string, url: string, note: string) {
+  return supabase!.from('enrolments')
+    .update({ access_url: url, access_note: note }).eq('id', id);
 }

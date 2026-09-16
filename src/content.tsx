@@ -5,7 +5,9 @@ import {
   reviews as fileReviews,
   Teacher,
 } from './data';
-import { GroupClassRow, isLive, loadPublicContent, ReviewRow } from './supabase';
+import {
+  GroupClassRow, VideoCourseRow, isLive, loadPublicContent, loadVideoCourses, ReviewRow,
+} from './supabase';
 
 /* Everything the public pages show, from the database when it is
    connected and from src/data.ts when it is not. Nothing on the site
@@ -25,6 +27,7 @@ interface Content {
   groupClasses: GroupClassRow[];
   months: string[];
   reviews: PublicReview[];
+  videoCourses: VideoCourseRow[];
 }
 
 export const monthLabel = (month: string) => {
@@ -60,6 +63,7 @@ const fallback: Content = {
   groupClasses: fallbackGroupClasses(),
   months: [],
   reviews: fileReviews.filter(r => r.approved !== false),
+  videoCourses: [],
 };
 
 const ContentContext = createContext<Content>(fallback);
@@ -73,15 +77,16 @@ export function ContentProvider({ children }: { children: React.ReactNode }) {
     if (!isLive) return;
     let cancelled = false;
 
-    loadPublicContent().then(data => {
+    Promise.all([loadPublicContent(), loadVideoCourses()]).then(([data, videos]) => {
       if (cancelled) return;
       if (!data) {
-        setContent({ ...fallback });   // database unreachable — show the file
+        setContent({ ...fallback, videoCourses: videos });
         return;
       }
 
       const months = Array.from(new Set(data.groupClasses.map(g => g.month))).sort();
       setContent({
+        videoCourses: videos,
         loading: false,
         fromDatabase: true,
         teachers: data.teachers.length ? data.teachers : fallback.teachers,

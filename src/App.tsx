@@ -8,6 +8,7 @@ import Header from './components/Header';
 import Hero from './components/Hero';
 import Services from './components/Services';
 import Teachers from './components/Teachers';
+import VideoCourses from './components/VideoCourses';
 import Testimonials from './components/Testimonials';
 import Faq from './components/Faq';
 import BookingSection from './components/BookingSection';
@@ -16,6 +17,7 @@ import Footer from './components/Footer';
 import Admin from './components/Admin';
 import ReceiptPage from './components/ReceiptPage';
 import TeacherPage from './components/TeacherPage';
+import ReturningStudent from './components/ReturningStudent';
 import { ContentProvider } from './content';
 
 /* Three addresses:
@@ -44,6 +46,8 @@ export default function App() {
     if (token) return <ReceiptPage token={token} />;
   }
 
+  if (hash.startsWith('#returning')) return <ReturningStudent />;
+
   if (hash.startsWith('#teacher/')) {
     const token = decodeURIComponent(hash.slice('#teacher/'.length));
     if (token) return <TeacherPage token={token} />;
@@ -56,6 +60,7 @@ export default function App() {
         <main>
           <Hero />
           <Services />
+          <VideoCourses />
           <Teachers />
           <Testimonials />
           <Faq />

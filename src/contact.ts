@@ -21,6 +21,8 @@ export interface Enrolment {
   paymentLast6?: string;
   paidAt?: string | null;
   confirmedAt?: string | null;
+  accessUrl?: string;      // the Zoom or video-course link you send them
+  accessNote?: string;
 
   firstName: string;
   lastName: string;
@@ -30,7 +32,10 @@ export interface Enrolment {
   facebook: string;
   notes: string;
 
-  bookingType: 'One-to-One' | 'Group course';
+  bookingType: 'One-to-One' | 'Group course' | 'Video course';
+  voucherCode?: string;
+  discountPercent?: number;
+  fullFee?: number;          // the price before any discount
   course: string;
   hours: number | null;
 
@@ -85,6 +90,10 @@ export const fullName = (e: Enrolment) =>
 export const paymentRule = (e: Enrolment) =>
   e.bookingType === 'One-to-One' ? payment.oneToOneRule : payment.groupRule;
 
+/** What the discount takes off, in money. */
+export const discountAmount = (e: Enrolment) =>
+  Math.max((e.fullFee ?? e.fee) - e.fee, 0);
+
 export const statusText = (e: Enrolment): string => {
   switch (e.status) {
     case 'confirmed': return 'PAID — place confirmed';
@@ -137,9 +146,14 @@ export function receiptText(e: Enrolment): string {
   }
   if (e.startDate) lines.push(`Preferred start: ${longDate(e.startDate)}`);
 
+  lines.push(``, `AMOUNT DUE`);
+  if (e.discountPercent) {
+    lines.push(
+      `Course fee: ${money(e.fullFee ?? e.fee)}`,
+      `Returning student discount (${e.discountPercent}%, code ${e.voucherCode}): -${money(discountAmount(e))}`,
+    );
+  }
   lines.push(
-    ``,
-    `AMOUNT DUE`,
     `${money(e.fee)}`,
     `Pay to: ${payment.accountName}`,
     `${payment.methods.map(m => `${m.name} ${m.number}`).join(' · ')}`,
