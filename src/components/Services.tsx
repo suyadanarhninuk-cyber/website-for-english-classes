@@ -71,7 +71,7 @@ export default function Services() {
               ))}
             </div>
 
-            <a href="#booking" className="w-full block text-center py-3 bg-brand-50 text-brand-700 font-semibold rounded-xl hover:bg-brand-100 transition-colors">
+            <a href="#booking" className="w-full block text-center py-3 bg-brand-600 text-white font-semibold rounded-xl hover:bg-brand-700 transition-colors">
               Book General English
             </a>
           </motion.div>
@@ -173,7 +173,7 @@ export default function Services() {
               )}
             </div>
 
-            <a href="#booking" className="w-full block text-center py-3 bg-gray-50 text-gray-900 font-semibold rounded-xl hover:bg-gray-100 border border-gray-200 transition-colors">
+            <a href="#booking" className="w-full block text-center py-3 bg-brand-600 text-white font-semibold rounded-xl hover:bg-brand-700 transition-colors">
               Join a Group Course
             </a>
           </motion.div>
