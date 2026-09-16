@@ -15,5 +15,5 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 
-export const SUPABASE_URL = 'https://uyltnxevhhmrmetbwccx.supabase.co/rest/v1/';
+export const SUPABASE_URL = 'https://uyltnxevhhmrmetbwccx.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_qR9NS9sRvzaccLqymt_08A_guOScd7O';
