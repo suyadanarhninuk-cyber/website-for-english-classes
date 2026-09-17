@@ -38,6 +38,46 @@ h1, h2, h3, h4 {
   letter-spacing: -0.01em;
 }
 
+/* ── Form boxes ────────────────────────────────────────────────────────
+   The site is designed light. Without this, a browser set to dark mode
+   styles typing boxes its own way — white text inside our white boxes,
+   which cannot be read. Saying so once fixes every box on every page. */
+
+:root {
+  color-scheme: light;
+}
+
+input,
+select,
+textarea,
+option {
+  color: #111827;
+  background-color: #ffffff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+/* Dates and times keep their own little controls readable too. */
+input[type="date"],
+input[type="month"],
+input[type="time"] {
+  color-scheme: light;
+}
+
+/* Boxes we deliberately draw on a grey panel keep that grey. */
+.bg-gray-50 input,
+.bg-gray-50 textarea,
+.bg-gray-50 select,
+input.bg-gray-50,
+textarea.bg-gray-50,
+select.bg-gray-50 {
+  background-color: #f9fafb;
+}
+
 /* ── Printing ──────────────────────────────────────────────────────────
    When a student prints, only the receipt should come out: no menu, no
    pricing, no footer. Anything with "no-print" disappears. */
