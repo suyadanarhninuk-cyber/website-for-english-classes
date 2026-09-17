@@ -38,6 +38,9 @@ export interface TeacherRow {
   id: string;
   token: string;
   photo: string;
+  experience: string;
+  years_experience: number | null;
+  cv_file: string;
   qualifications: string[];
   demo_url: string;
   teaches_video: boolean;
@@ -67,6 +70,11 @@ export interface SubmissionRow {
   qualifications: string;
   demo_url: string;
   teaches_video: boolean;
+  experience: string;
+  years_experience: number | null;
+  cv_file: string;
+  photo: string;
+  photo_consent: boolean;
   payout_method: string;
   payout_number: string;
   payout_name: string;
@@ -138,6 +146,8 @@ export async function sendTeacherForm(input: {
   qualifications: string;
   demo_url: string;
   teaches_video?: boolean;
+  photo?: string;
+  photo_consent?: boolean;
   payout_method?: string;
   payout_number?: string;
   payout_name?: string;
@@ -336,6 +346,9 @@ export interface PaymentRequest {
 
 export interface TeacherHome {
   name: string;
+  experience?: string;
+  years_experience?: number | null;
+  cv_file?: string;
   teaches_video?: boolean;
   demo_url?: string;
   photo: string;
@@ -356,6 +369,9 @@ export interface TeacherHome {
 
 export interface TeacherPrivateRow {
   teacher_id: string;
+  experience: string;
+  cv_file: string;
+  applied_at: string | null;
   phone: string;
   email: string;
   telegram: string;
@@ -668,3 +684,48 @@ export const saveLevel = (row: Partial<LevelRow>) =>
 
 export const deleteLevel = (id: string) =>
   supabase!.from('course_levels').delete().eq('id', id);
+
+/** A photograph sent with an application, before the teacher has a page
+ *  of their own. It sits in the same private-by-name bucket as the rest. */
+export async function uploadApplicationPhoto(file: File) {
+  if (!supabase) return { ok: false, path: '', message: 'Not connected.' };
+  const clean = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_').slice(-40);
+  const path = `applications/${crypto.randomUUID()}-${clean}`;
+  const { error } = await supabase.storage.from('teacher-photos').upload(path, file);
+  return error
+    ? { ok: false, path: '', message: error.message }
+    : { ok: true, path, message: '' };
+}
+
+/* ── CVs ───────────────────────────────────────────────────────────── */
+
+/** A teacher attaching their CV. It goes into a private store that only
+ *  your signed-in admin page can open. */
+export async function uploadTeacherCv(file: File) {
+  if (!supabase) return { ok: false, path: '', message: 'Not connected.' };
+  const clean = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_').slice(-60);
+  const path = `${crypto.randomUUID()}-${clean}`;
+  const { error } = await supabase.storage.from('teacher-cv').upload(path, file);
+  return error
+    ? { ok: false, path: '', message: error.message }
+    : { ok: true, path, message: '' };
+}
+
+/** A temporary address for a CV, for your eyes only. Expires in an hour. */
+export async function cvUrl(path: string) {
+  if (!supabase || !path) return '';
+  const { data } = await supabase.storage.from('teacher-cv').createSignedUrl(path, 3600);
+  return data?.signedUrl ?? '';
+}
+
+/** A teacher sending their experience, or replacing their CV. */
+export async function teacherSetCv(
+  token: string, cvPath: string, experience: string, years: number | null,
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_set_cv', {
+    p_token: token, p_cv: cvPath, p_experience: experience, p_years: years,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data ? { ok: true, message: '' } : { ok: false, message: 'We could not find your record.' };
+}

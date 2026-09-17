@@ -195,6 +195,7 @@ export interface Teacher {
   photo?: string;          // filled in from the database, not from this file
   qualifications?: string[];
   demoUrl?: string;
+  experience?: string;
   course: 'general' | 'ielts';
   levels: string[];
   platform: string;
