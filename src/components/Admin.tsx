@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Check, ChevronLeft, Loader2, LogOut, Plus, RefreshCw, Trash2, X,
+  Check, ChevronLeft, Loader2, LogOut, Mail, Plus, RefreshCw, Trash2, X,
 } from 'lucide-react';
 import {
   EnrolmentRow, GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
@@ -19,6 +19,57 @@ import {
 import { money, receiptLink } from '../contact';
 import ClassPaste, { ParsedClass } from './ClassPaste';
 import { LevelRow, adminLoadLevels, deleteLevel, saveLevel } from '../supabase';
+
+/* The email you send a student once their payment is confirmed. It is
+   composed here and opened in your own Gmail, so it comes from your real
+   address and their reply reaches you. */
+function studentEmail(row: EnrolmentRow) {
+  const link = `${window.location.origin}${window.location.pathname}#receipt/${row.token}`;
+  const name = row.first_name || 'there';
+
+  const subject = `${site.shortName} — your place is confirmed (${row.reference})`;
+
+  const lines = [
+    `Dear ${name},`,
+    ``,
+    `Thank you — we have received your payment and your place on ${row.course} is confirmed.`,
+    ``,
+    `Your receipt: ${link}`,
+    `Open that link any time to see or print your receipt. It is marked PAID.`,
+  ];
+
+  if (row.access_url) {
+    lines.push(``, `Your class: ${row.access_url}`);
+  }
+  if (row.access_note) {
+    lines.push(row.access_note);
+  }
+
+  lines.push(``, `Booking reference: ${row.reference}`);
+  if (row.teacher) lines.push(`Teacher: ${row.teacher}`);
+  if ((row.slots ?? []).length) lines.push(`Times: ${row.slots.join(' · ')}`);
+  if (row.start_date) lines.push(`Starts: ${row.start_date}`);
+  lines.push(`Fee paid: ${money(row.fee)}`);
+
+  lines.push(
+    ``,
+    `If you have any questions, reply to this email or message us on Telegram.`,
+    ``,
+    `${site.shortName}`,
+    site.phone,
+  );
+
+  return { subject, body: lines.join('\n') };
+}
+
+/** Opens Gmail with the message already written. */
+function gmailLink(row: EnrolmentRow) {
+  const { subject, body } = studentEmail(row);
+  const p = new URLSearchParams({
+    view: 'cm', fs: '1', to: row.email, su: subject, body,
+  });
+  return `https://mail.google.com/mail/?${p.toString()}`;
+}
 
 const teacherLink = (token: string) =>
   `${window.location.origin}${window.location.pathname}#teacher/${token}`;
@@ -1407,6 +1458,15 @@ function EnrolmentCard({
   const [link, setLink] = useState(row.access_url ?? '');
   const [linkNote, setLinkNote] = useState(row.access_note ?? '');
   const [saved, setSaved] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
+
+  /* For when Gmail is not your default mail app — paste it anywhere. */
+  const copyEmail = async () => {
+    const { subject, body } = studentEmail(row);
+    await navigator.clipboard.writeText(`${subject}\n\n${body}`);
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 2500);
+  };
 
   const saveLink = async () => {
     await setEnrolmentAccess(row.id, link.trim(), linkNote.trim());
@@ -1493,7 +1553,8 @@ function EnrolmentCard({
           </div>
           <p className="text-xs text-gray-500">
             The student sees this on their own private link, and only because their payment
-            is confirmed. Press <strong>Copy their link</strong> to send it on Telegram.
+            is confirmed. Save it first, then press <strong>Email their receipt</strong> and the
+            class link goes in the message too.
           </p>
         </div>
       )}
@@ -1507,6 +1568,17 @@ function EnrolmentCard({
         {row.status === 'confirmed' && (
           <button onClick={() => setSending(v => !v)} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
             {sending ? 'Close' : row.access_url ? 'Change their class link' : 'Send their class link'}
+          </button>
+        )}
+        {row.status === 'confirmed' && row.email && (
+          <a href={gmailLink(row)} target="_blank" rel="noopener noreferrer"
+            className={`${btn} bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2`}>
+            <Mail className="w-4 h-4" /> Email their receipt
+          </a>
+        )}
+        {row.status === 'confirmed' && row.email && (
+          <button onClick={copyEmail} className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+            {copiedEmail ? 'Copied' : 'Copy the message'}
           </button>
         )}
         {row.status !== 'confirmed' && (
