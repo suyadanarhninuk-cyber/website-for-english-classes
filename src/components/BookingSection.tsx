@@ -63,16 +63,24 @@ export default function BookingSection() {
 
   /* The group courses on offer: this month's batch when the database is
      driving things, otherwise everything in src/data.ts. */
+  /* Everything still to come, not only this month — a student looking in
+     September must be able to book an October course. */
   const bookableGroup = useMemo(() => {
     if (months.length === 0) return groupClasses;
     const now = thisMonth();
-    const month = months.find(m => m >= now) ?? months[months.length - 1];
-    return groupClasses.filter(c => c.month === month);
+    const upcoming = groupClasses.filter(c => !c.month || c.month >= now);
+    return upcoming.length ? upcoming : groupClasses;
   }, [groupClasses, months]);
 
-  const groupMonth = months.length
-    ? (months.find(m => m >= thisMonth()) ?? months[months.length - 1])
-    : '';
+  /* Grouped under a heading for each month, in date order. */
+  const groupByMonth = useMemo(() => {
+    const map = new Map<string, typeof bookableGroup>();
+    bookableGroup.forEach(c => {
+      const key = c.month || '';
+      map.set(key, [...(map.get(key) ?? []), c]);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [bookableGroup]);
 
   /* "Book with this teacher" buttons in the teachers section land here. */
   useEffect(() => {
@@ -432,12 +440,14 @@ export default function BookingSection() {
 
                 {mode === 'group' && (
                   <div className="space-y-2 flex-grow">
-                    {groupMonth && (
-                      <p className="text-sm font-semibold text-brand-700 mb-2">
-                        {monthLabel(groupMonth)} timetable
-                      </p>
-                    )}
-                    {bookableGroup.map(g => (
+                    {groupByMonth.map(([m, list]) => (
+                      <div key={m || 'any'} className="space-y-2">
+                        {m && (
+                          <p className="text-sm font-semibold text-brand-700 pt-2">
+                            {monthLabel(m)}
+                          </p>
+                        )}
+                        {list.map(g => (
                       <button key={g.id} type="button" onClick={() => setGroupCourse(g.name)}
                         className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
                           groupCourse === g.name ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
@@ -452,6 +462,8 @@ export default function BookingSection() {
                         </span>
                         <span className="font-bold text-brand-600 whitespace-nowrap">{money(g.fee)}</span>
                       </button>
+                        ))}
+                      </div>
                     ))}
                     {bookableGroup.length === 0 && (
                       <p className="text-sm text-gray-600 py-6">
