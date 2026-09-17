@@ -6,7 +6,7 @@ import {
   EnrolmentRow, GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
   adminLoadAll, adminLoadEnrolments, deleteEnrolment, deleteGroupClass, deleteReview,
   deleteSubmission, deleteTeacher, isLive, markSubmissionHandled, saveGroupClass,
-  cvUrl, isTelegramLink, saveTeacher, screenshotUrl, setEnrolmentAccess, setEnrolmentStatus, setReviewStatus,
+  FeeOffer, acceptTeacherOffer, adminLoadOffers, cvUrl, isTelegramLink, proposeFee, saveTeacher, screenshotUrl, setEnrolmentAccess, setEnrolmentStatus, setReviewStatus,
   signIn, signOut, supabase,
 } from '../supabase';
 import {
@@ -130,6 +130,7 @@ export default function Admin() {
   const [enrolments, setEnrolments] = useState<EnrolmentRow[]>([]);
   const [requests, setRequests] = useState<(PaymentRequest & { teacher_id: string })[]>([]);
   const [levels, setLevels] = useState<LevelRow[]>([]);
+  const [offers, setOffers] = useState<(FeeOffer & { teacher_id: string })[]>([]);
   const [privates, setPrivates] = useState<TeacherPrivateRow[]>([]);
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [attempts, setAttempts] = useState<VoucherAttempt[]>([]);
@@ -162,6 +163,7 @@ export default function Admin() {
     setEnrolments(bookings);
     setRequests(pay.requests);
     setLevels(await adminLoadLevels());
+    setOffers(await adminLoadOffers());
     setPrivates(pay.privates);
     setVouchers(vouch.vouchers);
     setAttempts(vouch.attempts);
@@ -1011,6 +1013,12 @@ export default function Admin() {
                       </div>
                     )}
 
+                    <FeePanel teacher={t} offers={offers.filter(o => o.teacher_id === t.id)}
+                      agreed={privateFor(t.id)?.agreed_rate ?? ''} onDone={refresh} onFlash={flash} />
+
+                    <ReadyChecklist teacher={t} priv={privateFor(t.id)}
+                      agreed={privateFor(t.id)?.agreed_rate ?? ''} />
+
                     <TeacherPrivatePanel teacher={t} row={privateFor(t.id)} requests={requests} onSaved={refresh} />
 
                     <div className="flex gap-2 mt-3">
@@ -1645,6 +1653,169 @@ function EnrolmentCard({
 /** What a student pays for each level this teacher is listed under, next
  *  to what you have agreed to pay them. Untick a level here and students
  *  stop being offered that teacher for it. */
+/** Agreeing the rate. You offer, they answer — or they ask and you
+ *  accept. Only one offer is ever open at a time. */
+function FeePanel({
+  teacher, offers, agreed, onDone, onFlash,
+}: {
+  teacher: TeacherRow;
+  offers: (FeeOffer & { teacher_id: string })[];
+  agreed: string;
+  onDone: () => void;
+  onFlash: (m: string) => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const [unit, setUnit] = useState('per hour');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const open = offers.find(o => o.status === 'open');
+
+  const send = async () => {
+    if (!amount.trim()) { onFlash('Put in an amount first.'); return; }
+    setBusy(true);
+    const res = await proposeFee(teacher.id, Number(amount), unit, note.trim());
+    setBusy(false);
+    if (!res.ok) { onFlash(res.message); return; }
+    setAmount(''); setNote('');
+    onFlash(`Offer sent to ${teacher.name}. They see it on their own page.`);
+    onDone();
+  };
+
+  const accept = async () => {
+    if (!open) return;
+    setBusy(true);
+    const res = await acceptTeacherOffer(open);
+    setBusy(false);
+    onFlash(res.ok ? `Agreed with ${teacher.name}.` : res.message);
+    onDone();
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-dashed border-gray-300">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Pay</span>
+        {agreed
+          ? <span className="text-sm font-semibold text-green-700">Agreed: {agreed}</span>
+          : <span className="text-sm text-gray-500">Nothing agreed yet</span>}
+      </div>
+
+      {open && open.proposed_by === 'teacher' && (
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3">
+          <div className="text-sm text-gray-900">
+            They are asking <strong>{money(open.amount)} {open.unit}</strong>
+          </div>
+          {open.note && <div className="text-xs text-gray-600 mt-1">{open.note}</div>}
+          <button onClick={accept} disabled={busy}
+            className={`${btn} bg-brand-600 text-white hover:bg-brand-700 mt-2`}>
+            Accept their figure
+          </button>
+        </div>
+      )}
+
+      {open && open.proposed_by === 'school' && (
+        <p className="text-sm text-gray-600 mb-3">
+          You offered {money(open.amount)} {open.unit} — waiting for their answer.
+        </p>
+      )}
+
+      <div className="grid sm:grid-cols-4 gap-2">
+        <input inputMode="numeric" value={amount} placeholder="Offer amount"
+          onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ''))} className={input} />
+        <select value={unit} onChange={e => setUnit(e.target.value)} className={input}>
+          <option value="per hour">per hour</option>
+          <option value="per session">per session</option>
+          <option value="per level">per level</option>
+          <option value="per month">per month</option>
+        </select>
+        <input value={note} onChange={e => setNote(e.target.value)}
+          placeholder="Message (optional)" className={input} />
+        <button onClick={send} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
+          Send offer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Everything that should be settled before a teacher goes live, with a
+ *  button that emails them about whatever is still missing. */
+function ReadyChecklist({
+  teacher, priv, agreed,
+}: {
+  teacher: TeacherRow;
+  priv?: TeacherPrivateRow;
+  agreed: string;
+}) {
+  const items: { label: string; done: boolean }[] = [
+    { label: 'Photo', done: Boolean(teacher.photo) },
+    { label: 'Levels ticked', done: (teacher.levels ?? []).length > 0 },
+    { label: 'Hours listed', done: (teacher.availability ?? []).length > 0 },
+    { label: 'Experience', done: Boolean(teacher.experience) },
+    { label: 'CV', done: Boolean(teacher.cv_file || priv?.cv_file) },
+    { label: 'Certificates', done: (teacher.certificates ?? []).length > 0 },
+    { label: 'Qualifications', done: (teacher.qualifications ?? []).length > 0 },
+    { label: 'Payment details', done: Boolean(priv?.payout_number) },
+    { label: 'Pay agreed', done: Boolean(agreed) },
+  ];
+  const missing = items.filter(i => !i.done);
+
+  const email = () => {
+    const subject = `${site.shortName} — before we put you on the website`;
+    const body = [
+      `Dear ${teacher.name.split(' ')[0]},`,
+      ``,
+      `Thank you for applying to teach with ${site.shortName}. Before your profile goes live we still need:`,
+      ``,
+      ...missing.map(m => `- ${m.label}`),
+      ``,
+      `You can add most of these yourself on your own page:`,
+      teacherLink(teacher.token),
+      ``,
+      `Once everything is in place we will publish your profile and start sending you students.`,
+      ``,
+      `${site.shortName}`,
+      site.phone,
+    ].join('\n');
+    const p = new URLSearchParams({
+      view: 'cm', fs: '1', to: priv?.email ?? '', su: subject, body,
+    });
+    window.open(`https://mail.google.com/mail/?${p.toString()}`, '_blank');
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-dashed border-gray-300">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
+          Before going live
+        </span>
+        {missing.length === 0
+          ? <span className="text-sm font-semibold text-green-700">Everything is ready</span>
+          : <span className="text-sm text-amber-800">{missing.length} still missing</span>}
+        <button onClick={email} className={`${btn} bg-white border border-gray-300 text-gray-700 ml-auto flex items-center gap-2`}>
+          <Mail className="w-4 h-4" /> Email them about it
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {items.map(i => (
+          <span key={i.label} className={`px-2 py-1 rounded-md text-xs font-medium ${
+            i.done ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'
+          }`}>
+            {i.done ? '✓' : '○'} {i.label}
+          </span>
+        ))}
+      </div>
+
+      {teacher.status === 'pending' && missing.length === 0 && (
+        <p className="text-xs text-gray-500 mt-2">
+          Set them to <strong>Live</strong> above and press Save to put them in front of students.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function MarginNote({
   levels, chosen, rate,
 }: {
@@ -1680,7 +1851,7 @@ function MarginNote({
 
 /** A link that opens a CV. The address lasts an hour and is made only
  *  when you ask for it, so a CV is never sitting on a public address. */
-function CvLink({ path }: { path: string }) {
+function CvLink({ path, label }: { path: string; label?: string }) {
   const [busy, setBusy] = useState(false);
 
   const open = async () => {
@@ -1693,7 +1864,7 @@ function CvLink({ path }: { path: string }) {
   return (
     <button onClick={open} disabled={busy}
       className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-800 mt-2">
-      <FileText className="w-4 h-4" /> {busy ? 'Opening…' : 'Open their CV'}
+      <FileText className="w-4 h-4" /> {busy ? 'Opening…' : label ?? 'Open their CV'}
     </button>
   );
 }
@@ -1731,6 +1902,16 @@ function TeacherRecord({
       )}
 
       {row?.cv_file && <CvLink path={row.cv_file} />}
+      {(teacher.certificates ?? []).length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-gray-500 mb-1">Certificates</div>
+          <div className="flex flex-wrap gap-2">
+            {teacher.certificates.map((c, i) => (
+              <CvLink key={c} path={c} label={`Certificate ${i + 1}`} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {mine.length > 0 && (
         <details className="mt-3">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Camera, CheckCircle2, ClipboardList, ExternalLink, RefreshCw, Upload, UserPlus } from 'lucide-react';
-import { forms, payment, site } from '../data';
+import { forms, payment, site, teachableCourses } from '../data';
 import {
   isLive, isTelegramLink, sendTeacherForm, uploadApplicationPhoto, uploadTeacherCv,
 } from '../supabase';
@@ -30,6 +30,7 @@ const guidance: Record<Mode, { title: string; lead: string; steps: string[] }> =
       'A photograph of yourself, if you are happy for students to see it',
       'How long you have been teaching, and what you have taught',
       'Your CV, if you have one — a PDF or Word file',
+      'Photographs or scans of your certificates — TKT, CELTA, a degree',
       'Your teaching qualifications, if you have any — TKT, CELTA, a degree',
       'A short demo lesson, uploaded to Telegram, so students can hear you teach',
       'Whether you would also like to record video classes students watch in their own time',
@@ -55,7 +56,14 @@ export default function TeacherPortal() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [telegram, setTelegram] = useState('');
-  const [courses, setCourses] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
+  const [otherCourses, setOtherCourses] = useState('');
+  const courses = [...picked, otherCourses.trim()].filter(Boolean).join(', ');
+
+  const togglePicked = (name: string) =>
+    setPicked(prev => prev.includes(name)
+      ? prev.filter(x => x !== name)
+      : [...prev, name]);
   const [blurb, setBlurb] = useState('');
   const [availability, setAvailability] = useState('');
   const [feeRequest, setFeeRequest] = useState('');
@@ -68,6 +76,7 @@ export default function TeacherPortal() {
   const [experience, setExperience] = useState('');
   const [cv, setCv] = useState<File | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [certs, setCerts] = useState<File[]>([]);
   const [photoOk, setPhotoOk] = useState(false);
   const [preview, setPreview] = useState('');
   const [sending, setSending] = useState(false);
@@ -80,6 +89,10 @@ export default function TeacherPortal() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!courses.trim()) {
+      setError('Please tick what you can teach, or write it in the box.');
+      return;
+    }
     if (demoUrl.trim() && !isTelegramLink(demoUrl)) {
       setError('The demo lesson must be a Telegram link, starting https://t.me/');
       return;
@@ -97,6 +110,17 @@ export default function TeacherPortal() {
       const up = await uploadTeacherCv(cv);
       if (!up.ok) { setSending(false); setError(`Your CV would not upload: ${up.message}`); return; }
       cvPath = up.path;
+    }
+
+    const certPaths: string[] = [];
+    for (const c of certs) {
+      const up = await uploadTeacherCv(c);
+      if (!up.ok) {
+        setSending(false);
+        setError(`A certificate would not upload: ${up.message}`);
+        return;
+      }
+      certPaths.push(up.path);
     }
 
     let photoPath = '';
@@ -120,6 +144,7 @@ export default function TeacherPortal() {
       qualifications: quals.trim(),
       demo_url: demoUrl.trim(),
       teaches_video: teachesVideo,
+      certificates: certPaths,
       photo: photoPath,
       photo_consent: photoOk,
     });
@@ -293,11 +318,29 @@ export default function TeacherPortal() {
                   </div>
 
                   <div>
-                    <label htmlFor="t-courses" className="block text-sm font-medium text-gray-700 mb-1">
-                      What can you teach?
-                    </label>
-                    <input id="t-courses" required placeholder="IELTS Foundation, General English Basic to Intermediate"
-                      value={courses} onChange={e => setCourses(e.target.value)} className={field} />
+                    <span className="block text-sm font-medium text-gray-700 mb-2">
+                      What can you teach? Tick everything that applies.
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {teachableCourses.map(c => {
+                        const on = picked.includes(c);
+                        return (
+                          <button key={c} type="button" onClick={() => togglePicked(c)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                              on ? 'bg-brand-600 text-white border-brand-600'
+                                 : 'bg-white text-gray-700 border-gray-200 hover:border-brand-400'
+                            }`}>
+                            {c}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input value={otherCourses} onChange={e => setOtherCourses(e.target.value)}
+                      placeholder="Anything else you teach that is not listed"
+                      className={`${field} mt-3`} />
+                    {picked.length === 0 && !otherCourses.trim() && (
+                      <p className="text-xs text-gray-500 mt-1">Tick at least one, or write it in.</p>
+                    )}
                   </div>
 
                   {mode === 'new' && (
@@ -395,6 +438,25 @@ export default function TeacherPortal() {
                           Up to 10 MB. Only Effortless Education can open it.
                         </p>
                       </div>
+                      <div>
+                        <span className="block text-sm font-medium text-gray-700 mb-1">
+                          Your certificates <span className="text-gray-400">(optional)</span>
+                        </span>
+                        <label className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-500 bg-gray-50">
+                          <span className="text-sm text-gray-700 truncate">
+                            {certs.length
+                              ? `${certs.length} file${certs.length === 1 ? '' : 's'} chosen`
+                              : 'Choose your certificates'}
+                          </span>
+                          <input type="file" multiple className="hidden"
+                            accept="application/pdf,.doc,.docx,image/png,image/jpeg"
+                            onChange={e => setCerts(Array.from(e.target.files ?? []))} />
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">
+                          TKT, CELTA, a degree — photographs are fine. Only {site.shortName} can open them.
+                        </p>
+                      </div>
+
 
                       <div>
                         <label htmlFor="t-quals" className="block text-sm font-medium text-gray-700 mb-1">
@@ -500,7 +562,7 @@ export default function TeacherPortal() {
                 </p>
                 <button type="button"
                   onClick={() => { setStage('choose'); setName(''); setPhone(''); setEmail('');
-                    setTelegram(''); setCourses(''); setBlurb(''); setAvailability(''); setFeeRequest(''); }}
+                    setTelegram(''); setPicked([]); setOtherCourses(''); setBlurb(''); setAvailability(''); setFeeRequest(''); }}
                   className="text-sm font-semibold text-brand-700 hover:text-brand-800">
                   Send something else
                 </button>

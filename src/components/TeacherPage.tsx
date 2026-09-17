@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Camera, CheckCircle2, Clock, FileText, Loader2, PlayCircle, Wallet } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, FileText, Handshake, Loader2, PlayCircle, Wallet } from 'lucide-react';
 import { payment, site } from '../data';
 import { money } from '../contact';
 import {
   TeacherHome, isTelegramLink, payoutProofUrl, teacherHome, teacherPhotoUrl,
-  teacherRequestPayment, teacherSetCv, teacherSetPhoto, teacherSetVideo, teacherSubmitHours,
-  teacherUpdatePayout, uploadTeacherCv, uploadTeacherPhoto,
+  FeeOffer, teacherAnswerFee, teacherProposeFee, teacherRequestPayment, teacherSetCv, teacherSetPhoto, teacherSetVideo, teacherSubmitHours,
+  teacherSetCertificates, teacherUpdatePayout, uploadTeacherCv, uploadTeacherPhoto,
 } from '../supabase';
 
 /* Lives at  effortlesseducation.uk/#teacher/<their token>
@@ -87,6 +87,7 @@ export default function TeacherPage({ token }: { token: string }) {
   const [experience, setExperience] = useState('');
   const [years, setYears] = useState('');
   const [cv, setCv] = useState<File | null>(null);
+  const [certs, setCerts] = useState<File[]>([]);
   useEffect(() => {
     if (!me) return;
     setExperience(me.experience ?? '');
@@ -106,7 +107,17 @@ export default function TeacherPage({ token }: { token: string }) {
     );
     setBusy(false);
     if (!res.ok) { flash(res.message); return; }
+    if (certs.length) {
+      const paths: string[] = [...(me?.certificates ?? [])];
+      for (const c of certs) {
+        const up = await uploadTeacherCv(c);
+        if (!up.ok) { flash(`A certificate would not upload: ${up.message}`); return; }
+        paths.push(up.path);
+      }
+      await teacherSetCertificates(token, paths);
+    }
     setCv(null);
+    setCerts([]);
     flash('Saved. Thank you.');
     load();
   };
@@ -131,6 +142,35 @@ export default function TeacherPage({ token }: { token: string }) {
     flash(res.ok
       ? 'Sent. We will look at your demo and message you.'
       : res.message);
+  };
+
+  /* agreeing what you are paid */
+  const offers: FeeOffer[] = me?.offers ?? [];
+  const openOffer = offers.find(o => o.status === 'open');
+  const [askAmount, setAskAmount] = useState('');
+  const [askUnit, setAskUnit] = useState('per hour');
+  const [askNote, setAskNote] = useState('');
+
+  const proposeFee = async () => {
+    if (!askAmount.trim()) { flash('Put in the amount first.'); return; }
+    setBusy(true);
+    const res = await teacherProposeFee(token, Number(askAmount), askUnit, askNote.trim());
+    setBusy(false);
+    if (!res.ok) { flash(res.message); return; }
+    setAskAmount(''); setAskNote('');
+    flash('Sent. We will look at it and reply.');
+    load();
+  };
+
+  const answerFee = async (accept: boolean) => {
+    if (!openOffer) return;
+    setBusy(true);
+    const res = await teacherAnswerFee(token, openOffer.id, accept, askNote.trim());
+    setBusy(false);
+    if (!res.ok) { flash(res.message); return; }
+    setAskNote('');
+    flash(accept ? 'Agreed. Thank you.' : 'Sent. Tell us what would work instead.');
+    load();
   };
 
   /* payout details */
@@ -335,6 +375,28 @@ export default function TeacherPage({ token }: { token: string }) {
             </div>
           </div>
 
+          <div className="mb-4">
+            <span className="block text-sm font-medium text-gray-700 mb-1">
+              Your certificates
+            </span>
+            <label className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-500 bg-gray-50">
+              <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+              <span className="text-sm text-gray-700 truncate">
+                {certs.length
+                  ? `${certs.length} new file${certs.length === 1 ? '' : 's'} chosen`
+                  : 'Add a certificate'}
+              </span>
+              <input type="file" multiple className="hidden"
+                accept="application/pdf,.doc,.docx,image/png,image/jpeg"
+                onChange={e => setCerts(Array.from(e.target.files ?? []))} />
+            </label>
+            <p className="text-xs text-gray-500 mt-1">
+              {(me.certificates?.length ?? 0) > 0
+                ? `${me.certificates!.length} already sent. Anything you add here is kept alongside them.`
+                : 'TKT, CELTA, a degree. Photographs are fine.'}
+            </p>
+          </div>
+
           <label htmlFor="e-exp" className="block text-sm font-medium text-gray-700 mb-1">
             Where you have taught, and what
           </label>
@@ -386,6 +448,106 @@ export default function TeacherPage({ token }: { token: string }) {
             <p className="text-xs text-green-700 mt-3">
               You are currently listed as recording video classes.
             </p>
+          )}
+        </section>
+
+        {/* agreeing the rate */}
+        <section className={card}>
+          <div className="flex items-center gap-2 mb-1">
+            <Handshake className="w-5 h-5 text-brand-600" />
+            <h2 className="text-lg font-bold text-gray-900">What you are paid</h2>
+          </div>
+
+          {me.agreed_rate ? (
+            <p className="text-sm text-gray-700 mb-4 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
+              Agreed: <strong>{me.agreed_rate}</strong>. Tell us below if you would like to change it.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-600 mb-4">
+              Nothing agreed yet. Tell us what you would like, or answer our offer below.
+            </p>
+          )}
+
+          {openOffer && openOffer.proposed_by === 'school' && (
+            <div className="p-4 rounded-xl border-2 mb-4" style={{ borderColor: site.brandColour }}>
+              <div className="text-sm text-gray-600">{site.shortName} offers</div>
+              <div className="text-2xl font-bold" style={{ color: site.brandColour }}>
+                {money(openOffer.amount)} <span className="text-base font-medium">{openOffer.unit}</span>
+              </div>
+              {openOffer.note && <p className="text-sm text-gray-700 mt-2">{openOffer.note}</p>}
+
+              <div className="flex flex-wrap gap-2 mt-4">
+                <button onClick={() => answerFee(true)} disabled={busy}
+                  className="px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
+                  Accept
+                </button>
+                <button onClick={() => answerFee(false)} disabled={busy}
+                  className="px-5 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-700 text-sm font-semibold">
+                  Decline
+                </button>
+              </div>
+            </div>
+          )}
+
+          {openOffer && openOffer.proposed_by === 'teacher' && (
+            <p className="text-sm text-amber-900 mb-4 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+              You asked for {money(openOffer.amount)} {openOffer.unit}. Waiting for our answer.
+            </p>
+          )}
+
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div>
+              <label htmlFor="f-amt" className="block text-sm font-medium text-gray-700 mb-1">
+                {openOffer?.proposed_by === 'school' ? 'Or ask for' : 'Amount'} ({site.currency})
+              </label>
+              <input id="f-amt" inputMode="numeric" value={askAmount}
+                onChange={e => setAskAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="15000" className={field} />
+            </div>
+            <div>
+              <label htmlFor="f-unit" className="block text-sm font-medium text-gray-700 mb-1">For each</label>
+              <select id="f-unit" value={askUnit} onChange={e => setAskUnit(e.target.value)} className={field}>
+                <option value="per hour">hour</option>
+                <option value="per session">session</option>
+                <option value="per level">level</option>
+                <option value="per month">month</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="f-note" className="block text-sm font-medium text-gray-700 mb-1">
+                Anything to add
+              </label>
+              <input id="f-note" value={askNote} onChange={e => setAskNote(e.target.value)} className={field} />
+            </div>
+          </div>
+
+          <button onClick={proposeFee} disabled={busy}
+            className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
+            Send this figure
+          </button>
+
+          {offers.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <div className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">History</div>
+              <ul className="space-y-1 text-sm text-gray-600">
+                {offers.map(o => (
+                  <li key={o.id} className="flex flex-wrap gap-2">
+                    <span className="text-gray-500">
+                      {new Date(o.created_at).toLocaleDateString('en-GB')}
+                    </span>
+                    <span>
+                      {o.proposed_by === 'school' ? site.shortName : 'You'} · {money(o.amount)} {o.unit}
+                    </span>
+                    <span className={`font-medium ${
+                      o.status === 'accepted' ? 'text-green-700'
+                        : o.status === 'declined' ? 'text-red-600' : 'text-gray-500'
+                    }`}>
+                      {o.status === 'open' ? 'waiting' : o.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
 
