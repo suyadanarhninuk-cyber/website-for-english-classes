@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Check, ChevronLeft, FileText, Loader2, LogOut, Mail, Plus, RefreshCw, Trash2, X,
+  Check, ChevronLeft, Download, FileText, Loader2, LogOut, Mail, Plus, RefreshCw, Trash2, X,
 } from 'lucide-react';
 import {
   EnrolmentRow, GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
@@ -18,6 +18,7 @@ import {
 } from '../supabase';
 import { money, receiptLink } from '../contact';
 import ClassPaste, { ParsedClass } from './ClassPaste';
+import { downloadCsv } from '../csv';
 import { LevelRow, adminLoadLevels, deleteLevel, saveLevel } from '../supabase';
 
 /* The email you send a student once their payment is confirmed. It is
@@ -420,7 +421,7 @@ export default function Admin() {
     await markSubmissionHandled(s.id, true);
     await refresh();
     setTab('teachers');
-    flash(`${s.name} added below. Tick their levels, then set them to Live.`);
+    flash(`${s.name} is below as PENDING — students cannot see them. Agree the pay, then set them Live.`);
   };
 
   const editTeacher = (id: string, patch: Partial<TeacherRow>) =>
@@ -462,6 +463,47 @@ export default function Admin() {
     await setEnrolmentStatus(e.id, 'rejected', why);
     await refresh();
   };
+
+  /* Your records, as a file Excel opens. */
+  const exportEnrolments = () => downloadCsv(
+    'effortless-enrolments',
+    ['Reference', 'Date', 'Student', 'Phone', 'Email', 'Telegram', 'Type', 'Course',
+     'Teacher', 'Times', 'Start', 'Fee', 'Voucher', 'Discount %', 'Paid by',
+     'Last 6', 'Status', 'Confirmed', 'Class link', 'Notes'],
+    enrolments.map(e => [
+      e.reference, e.created_at?.slice(0, 10), `${e.first_name} ${e.last_name}`.trim(),
+      e.phone, e.email, e.telegram, e.booking_type, e.course, e.teacher,
+      (e.slots ?? []).join(' / '), e.start_date, e.fee,
+      (e as unknown as { voucher_code?: string }).voucher_code ?? '',
+      (e as unknown as { discount_percent?: number }).discount_percent ?? 0,
+      e.payment_method, e.payment_last6, e.status,
+      e.confirmed_at?.slice(0, 10), e.access_url, e.notes,
+    ]),
+  );
+
+  const exportTeachers = () => downloadCsv(
+    'effortless-teachers',
+    ['Name', 'Status', 'Levels', 'Years', 'Qualifications', 'Phone', 'Email',
+     'Telegram', 'Wallet', 'Number', 'Account name', 'Agreed rate', 'Their page'],
+    teacherRows.map(t => {
+      const p = privateFor(t.id);
+      return [
+        t.name, t.status, (t.levels ?? []).join(' / '), t.years_experience ?? '',
+        (t.qualifications ?? []).join(' / '), p?.phone ?? '', p?.email ?? '',
+        p?.telegram ?? '', p?.payout_method ?? '', p?.payout_number ?? '',
+        p?.payout_name ?? '', p?.agreed_rate ?? '', teacherLink(t.token),
+      ];
+    }),
+  );
+
+  const exportPayments = () => downloadCsv(
+    'effortless-teacher-pay',
+    ['Teacher', 'Month', 'Amount', 'Status', 'Asked on', 'Paid on', 'Classes', 'Your note'],
+    requests.map(r => [
+      teacherName(r.teacher_id), r.period, r.amount, r.status,
+      r.created_at?.slice(0, 10), r.paid_at?.slice(0, 10) ?? '', r.detail, r.admin_note,
+    ]),
+  );
 
   const owedRequests = requests.filter(r => r.status === 'requested');
   const photosWaiting = teacherRows.filter(t => t.photo_pending).length;
@@ -568,7 +610,12 @@ export default function Admin() {
         {/* ENROLMENTS */}
         {tab === 'enrolments' && (
           <section className="bg-white rounded-2xl border border-gray-200 p-5">
-            <h2 className="font-bold text-gray-900 mb-1">Student bookings</h2>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="font-bold text-gray-900 mb-1">Student bookings</h2>
+              <button onClick={exportEnrolments} className={`${btn} bg-white border border-gray-300 text-gray-700 flex items-center gap-2`}>
+                <Download className="w-4 h-4" /> Download for Excel
+              </button>
+            </div>
             <p className="text-sm text-gray-500 mb-5">
               Check the transfer, then press <strong>Confirm payment</strong>. That turns the
               student's link into a receipt marked PAID, which they can print themselves.
@@ -839,7 +886,7 @@ export default function Admin() {
 
                     <div className="flex flex-wrap gap-2 mt-4">
                       <button onClick={() => publishSubmission(s)} className={`${btn} bg-brand-600 text-white hover:bg-brand-700 flex items-center gap-2`}>
-                        <Check className="w-4 h-4" /> Add to the website
+                        <Check className="w-4 h-4" /> Start talking to them
                       </button>
                       <button onClick={async () => { await markSubmissionHandled(s.id, true); refresh(); }}
                         className={`${btn} bg-white border border-gray-300 text-gray-700`}>
@@ -857,7 +904,12 @@ export default function Admin() {
             </section>
 
             <section className="bg-white rounded-2xl border border-gray-200 p-5">
-              <h2 className="font-bold text-gray-900 mb-1">On the website</h2>
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="font-bold text-gray-900 mb-1">On the website</h2>
+                <button onClick={exportTeachers} className={`${btn} bg-white border border-gray-300 text-gray-700 flex items-center gap-2`}>
+                  <Download className="w-4 h-4" /> Download for Excel
+                </button>
+              </div>
               <p className="text-sm text-gray-500 mb-4">
                 Only teachers set to <strong>Live</strong> can be seen and booked by students.
               </p>
@@ -865,6 +917,13 @@ export default function Admin() {
               <div className="space-y-4">
                 {teacherRows.map(t => (
                   <div key={t.id} className="p-4 rounded-xl border border-gray-200">
+                    {t.status === 'pending' && (
+                      <p className="mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
+                        <strong>Not published.</strong> Students cannot see or book {t.name || 'this teacher'}.
+                        Agree the pay below, then change Status to Live and press Save.
+                      </p>
+                    )}
+
                     <div className="grid md:grid-cols-12 gap-3">
                       <div className="md:col-span-4">
                         <label className="block text-xs text-gray-500 mb-1">Name</label>
@@ -879,7 +938,17 @@ export default function Admin() {
                       </div>
                       <div className="md:col-span-3">
                         <label className="block text-xs text-gray-500 mb-1">Status</label>
-                        <select value={t.status} onChange={e => editTeacher(t.id, { status: e.target.value as 'pending' | 'live' })} className={input}>
+                        <select value={t.status}
+                          onChange={e => {
+                            const next = e.target.value as 'pending' | 'live';
+                            if (next === 'live' && !privateFor(t.id)?.agreed_rate) {
+                              if (!confirm(
+                                `You have not agreed what ${t.name} is paid yet. Publish them anyway?`,
+                              )) return;
+                            }
+                            editTeacher(t.id, { status: next });
+                          }}
+                          className={input}>
                           <option value="live">Live — students see them</option>
                           <option value="pending">Pending — hidden</option>
                         </select>
@@ -1163,7 +1232,12 @@ export default function Admin() {
         {/* TEACHER PAY */}
         {tab === 'payments' && (
           <section className="bg-white rounded-2xl border border-gray-200 p-5">
-            <h2 className="font-bold text-gray-900 mb-1">Teacher pay</h2>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="font-bold text-gray-900 mb-1">Teacher pay</h2>
+              <button onClick={exportPayments} className={`${btn} bg-white border border-gray-300 text-gray-700 flex items-center gap-2`}>
+                <Download className="w-4 h-4" /> Download for Excel
+              </button>
+            </div>
             <p className="text-sm text-gray-500 mb-5">
               What your teachers have asked for. Their wallet details are shown with each
               request, so you can pay without hunting for them. Upload your transfer
