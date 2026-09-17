@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, ClipboardList, ExternalLink, RefreshCw, UserPlus } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle2, ClipboardList, ExternalLink, RefreshCw, Upload, UserPlus } from 'lucide-react';
 import { forms, payment, site } from '../data';
-import { isLive, isTelegramLink, sendTeacherForm } from '../supabase';
+import {
+  isLive, isTelegramLink, sendTeacherForm, uploadApplicationPhoto, uploadTeacherCv,
+} from '../supabase';
 import { notify } from '../notify';
 
 /* Teachers fill this in themselves.
@@ -25,6 +27,9 @@ const guidance: Record<Mode, { title: string; lead: string; steps: string[] }> =
       'The hours you are free each week, written one day per line',
       'What you would like to be paid per session',
       'The wallet you want to be paid into — KBZPay, AYA Pay or CB Pay — and the name on it',
+      'A photograph of yourself, if you are happy for students to see it',
+      'How long you have been teaching, and what you have taught',
+      'Your CV, if you have one — a PDF or Word file',
       'Your teaching qualifications, if you have any — TKT, CELTA, a degree',
       'A short demo lesson, uploaded to Telegram, so students can hear you teach',
       'Whether you would also like to record video classes students watch in their own time',
@@ -60,6 +65,11 @@ export default function TeacherPortal() {
   const [quals, setQuals] = useState('');
   const [demoUrl, setDemoUrl] = useState('');
   const [teachesVideo, setTeachesVideo] = useState(false);
+  const [experience, setExperience] = useState('');
+  const [cv, setCv] = useState<File | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoOk, setPhotoOk] = useState(false);
+  const [preview, setPreview] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
@@ -74,8 +84,32 @@ export default function TeacherPortal() {
       setError('The demo lesson must be a Telegram link, starting https://t.me/');
       return;
     }
+    if (photo && !photoOk) {
+      setError('Please tick the box to say we may show your photo, or remove it.');
+      return;
+    }
+
     setSending(true);
     setError('');
+
+    let cvPath = '';
+    if (cv) {
+      const up = await uploadTeacherCv(cv);
+      if (!up.ok) { setSending(false); setError(`Your CV would not upload: ${up.message}`); return; }
+      cvPath = up.path;
+    }
+
+    let photoPath = '';
+    if (photo) {
+      const up = await uploadApplicationPhoto(photo);
+      if (!up.ok) {
+        setSending(false);
+        setError(`Your photo would not upload: ${up.message}`);
+        return;
+      }
+      photoPath = up.path;
+    }
+
     const res = await sendTeacherForm({
       kind: mode, name: name.trim(), phone: phone.trim(), email: email.trim(),
       telegram: telegram.trim(), courses: courses.trim(), blurb: blurb.trim(),
@@ -86,6 +120,8 @@ export default function TeacherPortal() {
       qualifications: quals.trim(),
       demo_url: demoUrl.trim(),
       teaches_video: teachesVideo,
+      photo: photoPath,
+      photo_consent: photoOk,
     });
     setSending(false);
     if (!res.ok) { setError(res.message); return; }
@@ -105,8 +141,11 @@ export default function TeacherPortal() {
         asking_to_be_paid: feeRequest.trim(),
         pay_into: [payoutMethod, payoutNumber, payoutName].filter(Boolean).join(' · '),
         qualifications: quals.trim(),
+        experience: experience.trim(),
+        cv_attached: cv ? 'Yes — open the admin page to read it' : 'No',
         demo_lesson: demoUrl.trim(),
         wants_video_classes: teachesVideo ? 'Yes' : 'No',
+        sent_a_photo: photo ? 'Yes' : 'No',
         action: 'Open your admin page, Teachers tab, to approve or reply.',
       },
     );
@@ -286,6 +325,74 @@ export default function TeacherPortal() {
                           placeholder="e.g. 15000 MMK per hour" className={field} />
                         <p className="text-xs text-gray-500 mt-1">
                           Private between you and us. Never shown on the website.
+                        </p>
+                      </div>
+
+                      <div className="pt-4 border-t border-gray-100">
+                        <span className="block text-sm font-medium text-gray-700 mb-1">
+                          Your photo <span className="text-gray-400">(optional)</span>
+                        </span>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Students choosing a one-to-one teacher like to see who they will be
+                          learning with. A clear head and shoulders photo works best.
+                        </p>
+
+                        <div className="flex items-center gap-4">
+                          {preview
+                            ? <img src={preview} alt="" className="w-20 h-20 rounded-xl object-cover border border-gray-200" />
+                            : <div className="w-20 h-20 rounded-xl bg-gray-100 border border-dashed border-gray-300 flex items-center justify-center text-gray-400">
+                                <Camera className="w-6 h-6" />
+                              </div>}
+
+                          <label className="px-4 py-2.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 cursor-pointer hover:border-brand-400 transition-colors">
+                            {photo ? 'Choose a different photo' : 'Choose a photo'}
+                            <input type="file" accept="image/*" className="hidden"
+                              onChange={e => {
+                                const f = e.target.files?.[0] ?? null;
+                                setPhoto(f);
+                                setPreview(f ? URL.createObjectURL(f) : '');
+                                if (!f) setPhotoOk(false);
+                              }} />
+                          </label>
+                        </div>
+
+                        {photo && (
+                          <label className="flex items-start gap-2 mt-3 text-xs text-gray-700 cursor-pointer">
+                            <input type="checkbox" checked={photoOk} className="mt-0.5"
+                              onChange={e => setPhotoOk(e.target.checked)} />
+                            <span>
+                              I am happy for {site.shortName} to show this photo on the website.
+                              You can ask us to remove it at any time.
+                            </span>
+                          </label>
+                        )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="t-exp" className="block text-sm font-medium text-gray-700 mb-1">
+                          Your teaching experience
+                        </label>
+                        <textarea id="t-exp" rows={3} value={experience}
+                          onChange={e => setExperience(e.target.value)}
+                          placeholder="Four years teaching IELTS, two years General English at a language centre in Yangon"
+                          className={`${field} resize-none`} />
+                      </div>
+
+                      <div>
+                        <span className="block text-sm font-medium text-gray-700 mb-1">
+                          Your CV <span className="text-gray-400">(optional)</span>
+                        </span>
+                        <label className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-500 transition-colors bg-gray-50">
+                          <Upload className="w-4 h-4 text-gray-400 shrink-0" />
+                          <span className="text-sm text-gray-700 truncate">
+                            {cv ? cv.name : 'Choose a PDF or Word file'}
+                          </span>
+                          <input type="file" className="hidden"
+                            accept=".pdf,.doc,.docx,image/png,image/jpeg"
+                            onChange={e => setCv(e.target.files?.[0] ?? null)} />
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Up to 10 MB. Only Effortless Education can open it.
                         </p>
                       </div>
 

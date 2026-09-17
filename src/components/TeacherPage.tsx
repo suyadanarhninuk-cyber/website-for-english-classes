@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Camera, CheckCircle2, Clock, Loader2, PlayCircle, Wallet } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, FileText, Loader2, PlayCircle, Wallet } from 'lucide-react';
 import { payment, site } from '../data';
 import { money } from '../contact';
 import {
   TeacherHome, isTelegramLink, payoutProofUrl, teacherHome, teacherPhotoUrl,
-  teacherRequestPayment, teacherSetPhoto, teacherSetVideo, teacherSubmitHours,
-  teacherUpdatePayout, uploadTeacherPhoto,
+  teacherRequestPayment, teacherSetCv, teacherSetPhoto, teacherSetVideo, teacherSubmitHours,
+  teacherUpdatePayout, uploadTeacherCv, uploadTeacherPhoto,
 } from '../supabase';
 
 /* Lives at  effortlesseducation.uk/#teacher/<their token>
@@ -80,6 +80,34 @@ export default function TeacherPage({ token }: { token: string }) {
     if (!res.ok) { flash(res.message); return; }
     setPhotoFile(null);
     flash('Sent. Your photo appears once Effortless Education approves it.');
+    load();
+  };
+
+  /* experience and CV */
+  const [experience, setExperience] = useState('');
+  const [years, setYears] = useState('');
+  const [cv, setCv] = useState<File | null>(null);
+  useEffect(() => {
+    if (!me) return;
+    setExperience(me.experience ?? '');
+    setYears(me.years_experience ? String(me.years_experience) : '');
+  }, [me]);
+
+  const sendExperience = async () => {
+    setBusy(true);
+    let path = '';
+    if (cv) {
+      const up = await uploadTeacherCv(cv);
+      if (!up.ok) { setBusy(false); flash(`Your CV would not upload: ${up.message}`); return; }
+      path = up.path;
+    }
+    const res = await teacherSetCv(
+      token, path, experience.trim(), years.trim() ? Number(years) : null,
+    );
+    setBusy(false);
+    if (!res.ok) { flash(res.message); return; }
+    setCv(null);
+    flash('Saved. Thank you.');
     load();
   };
 
@@ -268,6 +296,56 @@ export default function TeacherPage({ token }: { token: string }) {
           <button onClick={sendHours} disabled={busy}
             className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
             Send my new hours
+          </button>
+        </section>
+
+        {/* experience and CV */}
+        <section className={card}>
+          <div className="flex items-center gap-2 mb-1">
+            <FileText className="w-5 h-5 text-brand-600" />
+            <h2 className="text-lg font-bold text-gray-900">Your experience</h2>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Students see a short version of this on your card. Your CV is private —
+            only {site.shortName} can open it.
+          </p>
+
+          <div className="grid sm:grid-cols-4 gap-4 mb-4">
+            <div className="sm:col-span-1">
+              <label htmlFor="e-years" className="block text-sm font-medium text-gray-700 mb-1">
+                Years teaching
+              </label>
+              <input id="e-years" inputMode="numeric" value={years}
+                onChange={e => setYears(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="5" className={field} />
+            </div>
+            <div className="sm:col-span-3">
+              <label htmlFor="e-cv" className="block text-sm font-medium text-gray-700 mb-1">
+                Your CV <span className="text-gray-400">(PDF or Word)</span>
+              </label>
+              <label className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-500 bg-gray-50">
+                <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                <span className="text-sm text-gray-700 truncate">
+                  {cv ? cv.name : me.cv_file ? 'Replace the CV we hold' : 'Choose a file'}
+                </span>
+                <input id="e-cv" type="file" className="hidden"
+                  accept="application/pdf,.doc,.docx,image/png,image/jpeg"
+                  onChange={e => setCv(e.target.files?.[0] ?? null)} />
+              </label>
+            </div>
+          </div>
+
+          <label htmlFor="e-exp" className="block text-sm font-medium text-gray-700 mb-1">
+            Where you have taught, and what
+          </label>
+          <textarea id="e-exp" rows={4} value={experience}
+            onChange={e => setExperience(e.target.value)}
+            placeholder="Four years teaching IELTS at a language centre in Yangon, plus two years of one-to-one General English."
+            className={`${field} resize-none`} />
+
+          <button onClick={sendExperience} disabled={busy}
+            className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
+            Save my experience
           </button>
         </section>
 

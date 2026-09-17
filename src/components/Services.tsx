@@ -18,8 +18,11 @@ export default function Services() {
     setMonth(months.find(m => m >= now) ?? months[months.length - 1]);
   }, [months]);
 
+  /* Past months are dropped from the tabs — nobody can join those. */
+  const upcomingMonths = months.filter(m => m >= thisMonth());
+
   const shown = months.length > 0
-    ? groupClasses.filter(c => c.month === month)
+    ? groupClasses.filter(c => c.month === month && c.month >= thisMonth())
     : groupClasses;
 
   return (
@@ -124,9 +127,9 @@ export default function Services() {
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Group Courses</h3>
             <p className="text-gray-500 mb-4">Learn together in an interactive setting</p>
 
-            {months.length > 1 && (
+            {upcomingMonths.length > 1 && (
               <div className="flex flex-wrap gap-2 mb-5">
-                {months.map(m => (
+                {upcomingMonths.map(m => (
                   <button key={m} type="button" onClick={() => setMonth(m)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                       month === m ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-200'
@@ -137,8 +140,8 @@ export default function Services() {
               </div>
             )}
 
-            {months.length === 1 && (
-              <p className="text-sm font-semibold text-brand-700 mb-4">{monthLabel(months[0])} timetable</p>
+            {upcomingMonths.length === 1 && (
+              <p className="text-sm font-semibold text-brand-700 mb-4">{monthLabel(upcomingMonths[0])} timetable</p>
             )}
 
             <div className="space-y-3 flex-grow mb-8">

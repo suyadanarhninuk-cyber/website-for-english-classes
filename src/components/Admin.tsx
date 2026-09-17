@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Check, ChevronLeft, Loader2, LogOut, Mail, Plus, RefreshCw, Trash2, X,
+  Check, ChevronLeft, FileText, Loader2, LogOut, Mail, Plus, RefreshCw, Trash2, X,
 } from 'lucide-react';
 import {
   EnrolmentRow, GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
   adminLoadAll, adminLoadEnrolments, deleteEnrolment, deleteGroupClass, deleteReview,
   deleteSubmission, deleteTeacher, isLive, markSubmissionHandled, saveGroupClass,
-  isTelegramLink, saveTeacher, screenshotUrl, setEnrolmentAccess, setEnrolmentStatus, setReviewStatus,
+  cvUrl, isTelegramLink, saveTeacher, screenshotUrl, setEnrolmentAccess, setEnrolmentStatus, setReviewStatus,
   signIn, signOut, supabase,
 } from '../supabase';
 import {
@@ -69,6 +69,15 @@ function gmailLink(row: EnrolmentRow) {
     view: 'cm', fs: '1', to: row.email, su: subject, body,
   });
   return `https://mail.google.com/mail/?${p.toString()}`;
+}
+
+/** A short id for a new course. Names written in Burmese leave nothing
+ *  behind when stripped to letters and numbers, so those get a generated
+ *  id instead of an empty one. */
+function courseId(name: string): string {
+  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '').slice(0, 30);
+  return slug.length >= 2 ? slug : `course-${Date.now().toString(36)}`;
 }
 
 const teacherLink = (token: string) =>
@@ -278,7 +287,7 @@ export default function Admin() {
     let n = 0;
     for (const r of rows) {
       const res = await saveLevel({
-        id: r.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30),
+        id: courseId(r.name),
         course: /ielts/i.test(r.name) ? 'ielts' : 'general',
         name: r.name.trim(),
         fee: r.fee,
@@ -300,9 +309,7 @@ export default function Admin() {
     for (const l of levels) {
       if (!l.name.trim()) continue;
       const res = await saveLevel({
-        id: l.id.startsWith('new-')
-          ? l.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)
-          : l.id,
+        id: l.id.startsWith('new-') ? courseId(l.name) : l.id,
         course: l.course, name: l.name.trim(), fee: Number(l.fee) || 0,
         hours: l.hours === null || Number.isNaN(Number(l.hours)) ? null : Number(l.hours),
         description: l.description, visible: l.visible, sort_order: l.sort_order,
@@ -388,6 +395,9 @@ export default function Admin() {
       qualifications: (s.qualifications ?? '').split(',').map(x => x.trim()).filter(Boolean),
       demo_url: s.demo_url ?? '',
       teaches_video: s.teaches_video ?? false,
+      experience: s.experience ?? '',
+      photo: s.photo_consent ? (s.photo ?? '') : '',
+      photo_consent: s.photo_consent ?? false,
       status: 'pending',
       sort_order: teacherRows.length + 1,
     });
@@ -400,6 +410,8 @@ export default function Admin() {
         phone: s.phone, email: s.email, telegram: s.telegram,
         payout_method: s.payout_method ?? '', payout_number: s.payout_number ?? '',
         payout_name: s.payout_name ?? '', agreed_rate: s.fee_request ?? '',
+        cv_file: s.cv_file ?? '', experience: s.experience ?? '',
+        applied_at: s.created_at,
       });
     }
 
@@ -770,6 +782,25 @@ export default function Admin() {
                       <Row label="Teaches" value={s.courses} />
                     </dl>
 
+                    {s.photo && (
+                      <div className="flex items-start gap-3 mt-3">
+                        <img src={teacherPhotoUrl(s.photo)} alt=""
+                          className="w-24 h-24 rounded-xl object-cover border border-gray-200" />
+                        <p className="text-xs text-gray-600">
+                          {s.photo_consent
+                            ? 'They agreed we may show this on the website.'
+                            : 'They did NOT tick consent — ask before publishing it.'}
+                        </p>
+                      </div>
+                    )}
+
+                    {s.experience && (
+                      <p className="text-sm text-gray-700 mt-3 whitespace-pre-line">
+                        <span className="text-gray-500">Experience:</span> {s.experience}
+                      </p>
+                    )}
+                    {s.cv_file && <CvLink path={s.cv_file} />}
+
                     {s.qualifications && (
                       <p className="text-sm text-gray-700 mt-3">
                         <span className="text-gray-500">Qualifications:</span> {s.qualifications}
@@ -860,7 +891,7 @@ export default function Admin() {
                       <div className="md:col-span-12">
                         <label className="block text-xs text-gray-500 mb-1">Levels they teach</label>
                         <div className="flex flex-wrap gap-2">
-                          {oneToOneLevels.map(l => {
+                          {(levels.length ? levels : oneToOneLevels).map(l => {
                             const on = t.levels?.includes(l.id);
                             return (
                               <button key={l.id} type="button"
@@ -871,10 +902,17 @@ export default function Admin() {
                                   on ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-300'
                                 }`}>
                                 {l.name}
+                                <span className={on ? 'text-white/70' : 'text-gray-400'}>
+                                  {' '}· {(l.fee / 1000).toFixed(0)}k
+                                </span>
                               </button>
                             );
                           })}
                         </div>
+                      </div>
+
+                      <div className="md:col-span-12">
+                        <MarginNote levels={levels} chosen={t.levels ?? []} rate={privateFor(t.id)?.agreed_rate ?? ''} />
                       </div>
 
                       <div className="md:col-span-6">
@@ -973,7 +1011,7 @@ export default function Admin() {
                       </div>
                     )}
 
-                    <TeacherPrivatePanel teacher={t} row={privateFor(t.id)} onSaved={refresh} />
+                    <TeacherPrivatePanel teacher={t} row={privateFor(t.id)} requests={requests} onSaved={refresh} />
 
                     <div className="flex gap-2 mt-3">
                       <button onClick={() => persistTeacher(t)} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
@@ -1180,10 +1218,11 @@ export default function Admin() {
 /* The private side of a teacher: where you pay them, and the link that
    is theirs alone. Never rendered on the public site. */
 function TeacherPrivatePanel({
-  teacher, row, onSaved,
+  teacher, row, requests, onSaved,
 }: {
   teacher: TeacherRow;
   row?: TeacherPrivateRow;
+  requests: (PaymentRequest & { teacher_id: string })[];
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1193,7 +1232,7 @@ function TeacherPrivatePanel({
     phone: row?.phone ?? '', email: row?.email ?? '', telegram: row?.telegram ?? '',
     payout_method: row?.payout_method ?? '', payout_number: row?.payout_number ?? '',
     payout_name: row?.payout_name ?? '', agreed_rate: row?.agreed_rate ?? '',
-    note: row?.note ?? '',
+    experience: row?.experience ?? '', note: row?.note ?? '',
   });
 
   const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -1232,12 +1271,15 @@ function TeacherPrivatePanel({
         </button>
       </div>
 
+      <TeacherRecord teacher={teacher} row={row} requests={requests} />
+
       {open && (
         <div className="grid sm:grid-cols-2 gap-3 mt-3">
           {([
             ['payout_method', 'Wallet'], ['payout_number', 'Number'],
             ['payout_name', 'Name on account'], ['agreed_rate', 'Agreed rate'],
-            ['phone', 'Phone'], ['telegram', 'Telegram'], ['email', 'Email'], ['note', 'Your note'],
+            ['phone', 'Phone'], ['telegram', 'Telegram'], ['email', 'Email'],
+            ['experience', 'Experience'], ['note', 'Your note'],
           ] as [keyof typeof form, string][]).map(([key, label]) => (
             <div key={key}>
               <label className="block text-xs text-gray-500 mb-1">{label}</label>
@@ -1596,6 +1638,115 @@ function EnrolmentCard({
         </button>
         <button onClick={onDelete} className={`${btn} text-red-600 hover:bg-red-50 ml-auto`}>Delete</button>
       </div>
+    </div>
+  );
+}
+
+/** What a student pays for each level this teacher is listed under, next
+ *  to what you have agreed to pay them. Untick a level here and students
+ *  stop being offered that teacher for it. */
+function MarginNote({
+  levels, chosen, rate,
+}: {
+  levels: LevelRow[];
+  chosen: string[];
+  rate: string;
+}) {
+  const picked = levels.filter(l => chosen.includes(l.id));
+  if (picked.length === 0 && !rate) return null;
+
+  return (
+    <div className="px-3 py-2 rounded-lg bg-gray-900 text-gray-100 text-xs">
+      <div className="font-semibold mb-1">
+        {rate ? `You pay them: ${rate}` : 'No rate agreed yet'}
+      </div>
+      {picked.length > 0 ? (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-gray-300">
+          {picked.map(l => (
+            <span key={l.id}>
+              {l.name} <span className="text-white font-medium">{money(l.fee)}</span>
+              {l.hours ? ` · ${l.hours}h` : ''}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="text-gray-400">
+          No levels ticked — students cannot book this teacher for anything.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A link that opens a CV. The address lasts an hour and is made only
+ *  when you ask for it, so a CV is never sitting on a public address. */
+function CvLink({ path }: { path: string }) {
+  const [busy, setBusy] = useState(false);
+
+  const open = async () => {
+    setBusy(true);
+    const url = await cvUrl(path);
+    setBusy(false);
+    if (url) window.open(url, '_blank', 'noopener');
+  };
+
+  return (
+    <button onClick={open} disabled={busy}
+      className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-800 mt-2">
+      <FileText className="w-4 h-4" /> {busy ? 'Opening…' : 'Open their CV'}
+    </button>
+  );
+}
+
+/** Everything you keep about a teacher after they are on the website:
+ *  how to pay them, how to reach them, their CV, and what they have
+ *  asked to be paid so far. */
+function TeacherRecord({
+  teacher, row, requests,
+}: {
+  teacher: TeacherRow;
+  row?: TeacherPrivateRow;
+  requests: (PaymentRequest & { teacher_id: string })[];
+}) {
+  const mine = requests.filter(r => r.teacher_id === teacher.id);
+  const paid = mine.filter(r => r.status === 'paid');
+  const total = paid.reduce((sum, r) => sum + r.amount, 0);
+
+  return (
+    <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-sm">
+      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1">
+        <Row label="Phone" value={row?.phone ?? ''} />
+        <Row label="Email" value={row?.email ?? ''} />
+        <Row label="Telegram" value={row?.telegram ?? ''} />
+        <Row label="Applied" value={row?.applied_at
+          ? new Date(row.applied_at).toLocaleDateString('en-GB') : ''} />
+        <Row label="Agreed rate" value={row?.agreed_rate ?? ''} />
+        <Row label="Paid so far" value={paid.length ? `${money(total)} over ${paid.length} payment${paid.length === 1 ? '' : 's'}` : 'nothing yet'} />
+      </div>
+
+      {(row?.experience || teacher.experience) && (
+        <p className="text-gray-700 mt-2 whitespace-pre-line">
+          <span className="text-gray-500">Experience:</span> {row?.experience || teacher.experience}
+        </p>
+      )}
+
+      {row?.cv_file && <CvLink path={row.cv_file} />}
+
+      {mine.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-gray-600">
+            Payment history ({mine.length})
+          </summary>
+          <ul className="mt-2 space-y-1 text-xs text-gray-600">
+            {mine.map(r => (
+              <li key={r.id} className="flex justify-between gap-3">
+                <span>{r.period} · {r.status === 'paid' ? 'paid' : r.status}</span>
+                <span className="font-medium text-gray-900">{money(r.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }
