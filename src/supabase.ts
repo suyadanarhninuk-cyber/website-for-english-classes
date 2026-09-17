@@ -37,6 +37,7 @@ export interface GroupClassRow {
 export interface TeacherRow {
   id: string;
   token: string;
+  certificates: string[];
   photo: string;
   experience: string;
   years_experience: number | null;
@@ -58,6 +59,7 @@ export interface TeacherRow {
 
 export interface SubmissionRow {
   id: string;
+  certificates: string[];
   kind: 'new' | 'update';
   name: string;
   phone: string;
@@ -151,6 +153,7 @@ export async function sendTeacherForm(input: {
   payout_method?: string;
   payout_number?: string;
   payout_name?: string;
+  certificates?: string[];
 }) {
   if (!supabase) return { ok: false, message: 'The teacher form is not connected yet.' };
   const { error } = await supabase.from('teacher_submissions').insert(input);
@@ -344,8 +347,20 @@ export interface PaymentRequest {
   paid_at: string | null;
 }
 
+export interface FeeOffer {
+  id: string;
+  amount: number;
+  unit: string;
+  proposed_by: 'school' | 'teacher';
+  note: string;
+  status: 'open' | 'accepted' | 'declined' | 'superseded';
+  created_at: string;
+}
+
 export interface TeacherHome {
   name: string;
+  offers?: FeeOffer[];
+  certificates?: string[];
   experience?: string;
   years_experience?: number | null;
   cv_file?: string;
@@ -725,6 +740,84 @@ export async function teacherSetCv(
   if (!supabase) return { ok: false, message: 'Not connected.' };
   const { data, error } = await supabase.rpc('teacher_set_cv', {
     p_token: token, p_cv: cvPath, p_experience: experience, p_years: years,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data ? { ok: true, message: '' } : { ok: false, message: 'We could not find your record.' };
+}
+
+/* ── agreeing what a teacher is paid ───────────────────────────────── */
+
+/** A teacher naming their own figure. */
+export async function teacherProposeFee(
+  token: string, amount: number, unit: string, note: string,
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_propose_fee', {
+    p_token: token, p_amount: amount, p_unit: unit, p_note: note,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data ? { ok: true, message: '' } : { ok: false, message: 'That did not go through.' };
+}
+
+/** A teacher accepting or declining your offer. */
+export async function teacherAnswerFee(
+  token: string, offerId: string, accept: boolean, note: string,
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_answer_fee', {
+    p_token: token, p_offer: offerId, p_accept: accept, p_note: note,
+  });
+  if (error) return { ok: false, message: error.message };
+  return data ? { ok: true, message: '' } : { ok: false, message: 'That offer is no longer open.' };
+}
+
+/* your side of the same conversation */
+
+export async function adminLoadOffers() {
+  if (!supabase) return [];
+  const { data } = await supabase.from('fee_offers').select('*')
+    .order('created_at', { ascending: false }).limit(500);
+  return (data ?? []) as (FeeOffer & { teacher_id: string })[];
+}
+
+/** You naming a figure. Any offer still open is set aside first, so there
+ *  is only ever one live offer per teacher. */
+export async function proposeFee(
+  teacherId: string, amount: number, unit: string, note: string,
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  await supabase.from('fee_offers').update({ status: 'superseded' })
+    .eq('teacher_id', teacherId).eq('status', 'open');
+  const { error } = await supabase.from('fee_offers').insert({
+    teacher_id: teacherId, amount, unit, proposed_by: 'school', note,
+  });
+  return error ? { ok: false, message: error.message } : { ok: true, message: '' };
+}
+
+/** You accepting what the teacher asked for. Writes the agreed figure
+ *  into their private record so it is the same number everywhere. */
+export async function acceptTeacherOffer(
+  offer: FeeOffer & { teacher_id: string },
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { error } = await supabase.from('fee_offers')
+    .update({ status: 'accepted', responded_at: new Date().toISOString() })
+    .eq('id', offer.id);
+  if (error) return { ok: false, message: error.message };
+
+  const res = await supabase.from('teacher_private').upsert({
+    teacher_id: offer.teacher_id,
+    agreed_rate: `${offer.amount.toLocaleString('en-US')} MMK ${offer.unit}`,
+    updated_at: new Date().toISOString(),
+  });
+  return res.error ? { ok: false, message: res.error.message } : { ok: true, message: '' };
+}
+
+/** A teacher's certificates, kept in the same private store as CVs. */
+export async function teacherSetCertificates(token: string, files: string[]) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_set_certificates', {
+    p_token: token, p_files: files,
   });
   if (error) return { ok: false, message: error.message };
   return data ? { ok: true, message: '' } : { ok: false, message: 'We could not find your record.' };

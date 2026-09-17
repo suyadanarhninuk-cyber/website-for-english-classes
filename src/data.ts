@@ -275,6 +275,30 @@ export const teachers: Teacher[] = [
 
 
 /* ───────────────────────────────────────────────────────────────────────
+   4b. WHAT A TEACHER CAN TICK ON THE APPLICATION FORM
+   ───────────────────────────────────────────────────────────────────────
+   Add or remove a line and the boxes on the teacher form change with it.
+   Anything not on this list, a teacher writes in the "anything else" box.
+   ─────────────────────────────────────────────────────────────────────── */
+
+export const teachableCourses: string[] = [
+  "Basic",
+  "Elementary",
+  "Pre-Intermediate",
+  "Intermediate",
+  "Upper-Intermediate",
+  "Advanced",
+  "IELTS",
+  "SAT",
+  "TOEIC",
+  "Duolingo",
+  "TKT",
+  "Business English",
+  "Young learners"
+];
+
+
+/* ───────────────────────────────────────────────────────────────────────
    5. HOW STUDENTS PAY YOU
    ───────────────────────────────────────────────────────────────────────
    These details are printed on every receipt. They are copied from your
