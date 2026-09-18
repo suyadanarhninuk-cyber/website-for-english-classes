@@ -131,6 +131,7 @@ export default function Admin() {
   const [enrolments, setEnrolments] = useState<EnrolmentRow[]>([]);
   const [requests, setRequests] = useState<(PaymentRequest & { teacher_id: string })[]>([]);
   const [levels, setLevels] = useState<LevelRow[]>([]);
+  const [claims, setClaims] = useState<ClaimLine[]>([]);
   const [offers, setOffers] = useState<(FeeOffer & { teacher_id: string })[]>([]);
   const [privates, setPrivates] = useState<TeacherPrivateRow[]>([]);
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
@@ -164,6 +165,16 @@ export default function Admin() {
     setEnrolments(bookings);
     setRequests(pay.requests);
     setLevels(await adminLoadLevels());
+
+    /* Which students each pay request is claiming for. Read straight from
+       the database here rather than through a helper, so this needs no
+       change to src/supabase.ts. */
+    if (supabase) {
+      const { data } = await supabase
+        .from('claim_lines')
+        .select('id, request_id, hours, enrolments(reference, first_name, last_name, course, fee)');
+      setClaims((data ?? []) as unknown as ClaimLine[]);
+    }
     setOffers(await adminLoadOffers());
     setPrivates(pay.privates);
     setVouchers(vouch.vouchers);
@@ -1253,6 +1264,7 @@ export default function Admin() {
                 <PayRequestCard key={r.id} row={r}
                   name={teacherName(r.teacher_id)}
                   wallet={privateFor(r.teacher_id)}
+                  lines={claims.filter(c => c.request_id === r.id)}
                   onDone={refresh} onFlash={flash} />
               ))}
             </div>
@@ -1438,12 +1450,27 @@ function VoucherCard({ row, onDone }: { row: VoucherRow; onDone: () => void }) {
   );
 }
 
+/** One student a teacher is claiming for, with the booking behind it. */
+interface ClaimLine {
+  id: string;
+  request_id: string;
+  hours: number;
+  enrolments: {
+    reference: string;
+    first_name: string;
+    last_name: string;
+    course: string;
+    fee: number;
+  } | null;
+}
+
 function PayRequestCard({
-  row, name, wallet, onDone, onFlash,
+  row, name, wallet, lines, onDone, onFlash,
 }: {
   row: PaymentRequest & { teacher_id: string };
   name: string;
   wallet?: TeacherPrivateRow;
+  lines: ClaimLine[];
   onDone: () => void;
   onFlash: (m: string) => void;
 }) {
@@ -1493,6 +1520,44 @@ function PayRequestCard({
         </div>
         <div className="text-xl font-bold text-gray-900">{money(row.amount)}</div>
       </div>
+
+      {/* Who this claim is for. Every line is a booking you confirmed
+          yourself, so the money going out is tied to money that came in. */}
+      {lines.length > 0 && (
+        <div className="mt-3 rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-3 py-1.5 bg-gray-50 text-xs font-semibold text-gray-600 flex justify-between">
+            <span>Claiming for {lines.length} student{lines.length === 1 ? '' : 's'}</span>
+            <span>{lines.reduce((n, l) => n + Number(l.hours || 0), 0)} hours</span>
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {lines.map(l => (
+              <li key={l.id} className="px-3 py-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                <span>
+                  <span className="font-medium text-gray-900">
+                    {l.enrolments
+                      ? `${l.enrolments.first_name} ${l.enrolments.last_name}`.trim()
+                      : 'Booking removed'}
+                  </span>
+                  {l.enrolments && (
+                    <span className="text-gray-500"> · {l.enrolments.course}</span>
+                  )}
+                </span>
+                <span className="flex items-center gap-3">
+                  {l.enrolments && (
+                    <>
+                      <span className="font-mono text-xs text-gray-500">{l.enrolments.reference}</span>
+                      <span className="text-xs text-green-700 font-medium">
+                        paid {money(l.enrolments.fee)}
+                      </span>
+                    </>
+                  )}
+                  <span className="font-semibold text-gray-900">{l.hours}h</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {row.detail && <p className="text-sm text-gray-700 mt-3">{row.detail}</p>}
 

@@ -6,6 +6,7 @@ import {
   TeacherHome, isTelegramLink, payoutProofUrl, teacherHome, teacherPhotoUrl,
   FeeOffer, teacherAnswerFee, teacherProposeFee, teacherRequestPayment, teacherSetCv, teacherSetPhoto, teacherSetVideo, teacherSubmitHours,
   teacherSetCertificates, teacherUpdatePayout, uploadTeacherCv, uploadTeacherPhoto,
+  ClaimableEnrolment, parseAgreedRate, teacherClaimPayment, teacherClaimable,
 } from '../supabase';
 
 /* Lives at  effortlesseducation.uk/#teacher/<their token>
@@ -39,9 +40,15 @@ export default function TeacherPage({ token }: { token: string }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const [claimable, setClaimable] = useState<ClaimableEnrolment[]>([]);
+
   const load = useCallback(async () => {
     setLoading(true);
-    setMe(await teacherHome(token));
+    const [home, students] = await Promise.all([
+      teacherHome(token), teacherClaimable(token),
+    ]);
+    setMe(home);
+    setClaimable(students);
     setLoading(false);
   }, [token]);
 
@@ -194,18 +201,68 @@ export default function TeacherPage({ token }: { token: string }) {
     if (res.ok) load();
   };
 
-  /* asking to be paid */
-  const [period, setPeriod] = useState('');
+  /* asking to be paid — picked from your own confirmed students */
+  const thisMonth = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const [period, setPeriod] = useState(thisMonth);
   const [detail, setDetail] = useState('');
   const [amount, setAmount] = useState('');
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [freeText, setFreeText] = useState(false);
 
+  const togglePick = (id: string) =>
+    setPicked(prev => {
+      const next = { ...prev };
+      if (id in next) delete next[id];
+      else next[id] = '';
+      return next;
+    });
+
+  const setHoursFor = (id: string, value: string) =>
+    setPicked(prev => ({ ...prev, [id]: value.replace(/[^0-9.]/g, '') }));
+
+  const totalHours = Object.values(picked)
+    .reduce((n, h) => n + (Number(h) || 0), 0);
+
+  /* If a rate per hour has been agreed, work the amount out for them.
+     They can still type over it. */
+  const rate = parseAgreedRate(me?.agreed_rate ?? '');
+  const suggested = rate && rate.unit === 'per hour' && totalHours > 0
+    ? Math.round(rate.amount * totalHours)
+    : 0;
+  useEffect(() => {
+    if (suggested > 0) setAmount(String(suggested));
+  }, [suggested]);
+
+  const sendClaim = async () => {
+    if (!period.trim()) { flash('Which month is this for?'); return; }
+
+    const lines = Object.entries(picked)
+      .map(([enrolment_id, h]) => ({ enrolment_id, hours: Number(h) || 0 }));
+
+    if (lines.length === 0) { flash('Tick the students you taught.'); return; }
+    if (lines.some(l => l.hours <= 0)) { flash('Put the hours in for everyone you ticked.'); return; }
+    if (!amount.trim()) { flash('How much is due?'); return; }
+
+    setBusy(true);
+    const res = await teacherClaimPayment(
+      token, period.trim(), Number(amount) || 0, detail.trim(), lines,
+    );
+    setBusy(false);
+    if (!res.ok) { flash(res.message); return; }
+    setPicked({}); setDetail(''); setAmount('');
+    flash('Sent. You will see it marked Paid here once the transfer is made.');
+    load();
+  };
+
+  /* The old free-text form, kept for anything the list cannot cover —
+     a student who paid in cash, say. */
   const askForPay = async () => {
     if (!period.trim() || !amount.trim()) { flash('Add the month and the amount.'); return; }
     setBusy(true);
     const res = await teacherRequestPayment(token, period.trim(), detail.trim(), Number(amount) || 0);
     setBusy(false);
     if (!res.ok) { flash(res.message); return; }
-    setPeriod(''); setDetail(''); setAmount('');
+    setDetail(''); setAmount('');
     flash('Sent. You will see it marked Paid here once the transfer is made.');
     load();
   };
@@ -606,36 +663,141 @@ export default function TeacherPage({ token }: { token: string }) {
         <section className={card}>
           <h2 className="text-lg font-bold text-gray-900 mb-1">Ask to be paid</h2>
           <p className="text-sm text-gray-600 mb-4">
-            When you have finished your classes, tell us the month, what you taught and how
-            much is due. We transfer it and put the screenshot here.
+            Tick the students you taught this month and put in your hours. Only students
+            whose payment {site.shortName} has confirmed appear here.
           </p>
 
-          <div className="grid sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label htmlFor="r-period" className="block text-sm font-medium text-gray-700 mb-1">Month</label>
-              <input id="r-period" value={period} onChange={e => setPeriod(e.target.value)}
-                placeholder="September 2026" className={field} />
-            </div>
-            <div>
-              <label htmlFor="r-amount" className="block text-sm font-medium text-gray-700 mb-1">
-                Amount ({site.currency})
-              </label>
-              <input id="r-amount" inputMode="numeric" value={amount}
-                onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="150000" className={field} />
-            </div>
+          <div className="mb-4 max-w-xs">
+            <label htmlFor="r-period" className="block text-sm font-medium text-gray-700 mb-1">
+              Which month
+            </label>
+            <input id="r-period" value={period} onChange={e => setPeriod(e.target.value)}
+              placeholder="September 2026" className={field} />
           </div>
 
-          <label htmlFor="r-detail" className="block text-sm font-medium text-gray-700 mb-1">
-            Which classes
-          </label>
-          <textarea id="r-detail" rows={3} value={detail} onChange={e => setDetail(e.target.value)}
-            placeholder="12 hours with Thuya (Intermediate), 8 hours with Su Su (Basic)"
-            className={`${field} resize-none`} />
+          {claimable.length > 0 && !freeText && (
+            <>
+              <div className="rounded-xl border border-gray-200 overflow-hidden mb-4">
+                {claimable.map(c => {
+                  const on = c.enrolment_id in picked;
+                  return (
+                    <div key={c.enrolment_id}
+                      className={`flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 ${
+                        on ? 'bg-brand-50' : 'bg-white'
+                      }`}>
+                      <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                        <input type="checkbox" checked={on}
+                          onChange={() => togglePick(c.enrolment_id)} />
+                        <span className="min-w-0">
+                          <span className="block font-medium text-gray-900 truncate">
+                            {c.student}
+                          </span>
+                          <span className="block text-xs text-gray-500 truncate">
+                            {c.course}
+                            {c.start_date && ` · from ${new Date(c.start_date).toLocaleDateString('en-GB', {
+                              day: 'numeric', month: 'short',
+                            })}`}
+                            <span className="font-mono"> · {c.reference}</span>
+                          </span>
+                        </span>
+                      </label>
 
-          <button onClick={askForPay} disabled={busy}
-            className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
-            Send my request
+                      <span className="text-xs text-gray-500 whitespace-nowrap">
+                        {c.hours_left === null
+                          ? 'no set hours'
+                          : `${c.hours_left} of ${c.hours_total}h left`}
+                      </span>
+
+                      <input
+                        inputMode="decimal"
+                        value={picked[c.enrolment_id] ?? ''}
+                        onChange={e => setHoursFor(c.enrolment_id, e.target.value)}
+                        disabled={!on}
+                        placeholder="hrs"
+                        className="w-20 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center disabled:bg-gray-50 disabled:text-gray-400 outline-none focus:ring-2 focus:ring-brand-600"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <span className="block text-sm font-medium text-gray-700 mb-1">Total hours</span>
+                  <div className="px-4 py-2.5 rounded-lg bg-gray-50 border border-gray-200 text-sm font-semibold text-gray-900">
+                    {totalHours || 0} hours
+                    {Object.keys(picked).length > 0 &&
+                      ` · ${Object.keys(picked).length} student${Object.keys(picked).length === 1 ? '' : 's'}`}
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="r-amount" className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount ({site.currency})
+                  </label>
+                  <input id="r-amount" inputMode="numeric" value={amount}
+                    onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="150000" className={field} />
+                  {suggested > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Worked out from your agreed rate. Change it if it is not right.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <label htmlFor="r-detail" className="block text-sm font-medium text-gray-700 mb-1">
+                Anything to add <span className="text-gray-400">(optional)</span>
+              </label>
+              <input id="r-detail" value={detail} onChange={e => setDetail(e.target.value)}
+                placeholder="Two lessons moved to the following week" className={field} />
+
+              <button onClick={sendClaim} disabled={busy}
+                className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
+                {busy ? 'Sending…' : 'Send my request'}
+              </button>
+            </>
+          )}
+
+          {claimable.length === 0 && !freeText && (
+            <p className="text-sm text-gray-600 py-6 px-4 rounded-xl bg-gray-50 border border-gray-200">
+              No students are waiting to be claimed for. They appear here once
+              {' '}{site.shortName} has confirmed a student paid for your class.
+            </p>
+          )}
+
+          {/* For anything the list cannot cover — a student who paid in cash,
+              or a class booked before the website. */}
+          {freeText && (
+            <>
+              <div className="mb-4 max-w-xs">
+                <label htmlFor="r-amount-2" className="block text-sm font-medium text-gray-700 mb-1">
+                  Amount ({site.currency})
+                </label>
+                <input id="r-amount-2" inputMode="numeric" value={amount}
+                  onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="150000" className={field} />
+              </div>
+
+              <label htmlFor="r-detail-2" className="block text-sm font-medium text-gray-700 mb-1">
+                Which classes
+              </label>
+              <textarea id="r-detail-2" rows={3} value={detail} onChange={e => setDetail(e.target.value)}
+                placeholder="12 hours with Thuya (Intermediate), 8 hours with Su Su (Basic)"
+                className={`${field} resize-none`} />
+
+              <button onClick={askForPay} disabled={busy}
+                className="mt-4 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-60">
+                Send my request
+              </button>
+            </>
+          )}
+
+          <button type="button"
+            onClick={() => { setFreeText(v => !v); setPicked({}); setDetail(''); setAmount(''); }}
+            className="block mt-4 text-sm font-medium text-gray-500 hover:text-gray-900">
+            {freeText
+              ? '← Back to picking students'
+              : 'A student is missing from this list'}
           </button>
         </section>
 
