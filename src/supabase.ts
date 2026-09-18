@@ -822,3 +822,60 @@ export async function teacherSetCertificates(token: string, files: string[]) {
   if (error) return { ok: false, message: error.message };
   return data ? { ok: true, message: '' } : { ok: false, message: 'We could not find your record.' };
 }
+
+/* ── claiming pay against real bookings ────────────────────────────── */
+
+/** One student a teacher may claim for: a booking you have confirmed,
+ *  with the hours already claimed against it taken off. */
+export interface ClaimableEnrolment {
+  enrolment_id: string;
+  reference: string;
+  student: string;
+  course: string;
+  booking_type: string;
+  start_date: string | null;
+  slots: string[];
+  hours_total: number | null;
+  hours_claimed: number;
+  hours_left: number | null;   // null when the course has no fixed hours
+}
+
+/** The teacher's own claimable students. Only theirs, only confirmed,
+ *  and only while hours remain. */
+export async function teacherClaimable(token: string): Promise<ClaimableEnrolment[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('teacher_claimable', { p_token: token });
+  if (error || !data) return [];
+  return data as ClaimableEnrolment[];
+}
+
+/** Sending a claim. Every line is checked in the database before
+ *  anything is saved, so a wrong figure comes back as a message rather
+ *  than a half-saved request. */
+export async function teacherClaimPayment(
+  token: string,
+  period: string,
+  amount: number,
+  note: string,
+  lines: { enrolment_id: string; hours: number }[],
+) {
+  if (!supabase) return { ok: false, message: 'Not connected.' };
+  const { data, error } = await supabase.rpc('teacher_claim_payment', {
+    p_token: token, p_period: period, p_amount: amount, p_note: note, p_lines: lines,
+  });
+  if (error) return { ok: false, message: error.message };
+  const res = data as { ok: boolean; message?: string; hours?: number };
+  return res?.ok
+    ? { ok: true, message: '' }
+    : { ok: false, message: res?.message ?? 'That did not go through.' };
+}
+
+/** Reads "15,000 MMK per hour" back into numbers, so a claim can suggest
+ *  the amount instead of making the teacher work it out. */
+export function parseAgreedRate(rate: string): { amount: number; unit: string } | null {
+  const m = (rate ?? '').match(/([\d,]+)\s*[A-Za-z]*\s*(per\s+\w+)/i);
+  if (!m) return null;
+  const amount = Number(m[1].replace(/,/g, ''));
+  if (!amount) return null;
+  return { amount, unit: m[2].toLowerCase() };
+}
