@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Check, ChevronLeft, Download, FileText, Loader2, LogOut, Mail, Plus, RefreshCw, Trash2, X,
+  Check, ChevronLeft, Download, FileText, Loader2, LogOut, Mail, Plus, RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
 import {
   EnrolmentRow, GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
@@ -132,6 +132,7 @@ export default function Admin() {
   const [requests, setRequests] = useState<(PaymentRequest & { teacher_id: string })[]>([]);
   const [levels, setLevels] = useState<LevelRow[]>([]);
   const [claims, setClaims] = useState<ClaimLine[]>([]);
+  const [teacherSearch, setTeacherSearch] = useState('');
   const [offers, setOffers] = useState<(FeeOffer & { teacher_id: string })[]>([]);
   const [privates, setPrivates] = useState<TeacherPrivateRow[]>([]);
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
@@ -455,7 +456,252 @@ export default function Admin() {
     await refresh();
   };
 
-  const waiting = submissions.filter(s => !s.handled);
+  /* Their private record — Gmail, phone, how you pay them. Students
+     never see any of this; it is only ever read here. */
+  const privateFor = (id: string) => privates.find(p => p.teacher_id === id);
+
+  /* ── the teacher search ────────────────────────────────────────────
+     One box filters all three lists below. It looks at the private
+     details too — Gmail, phone, Telegram — so you can find someone by
+     the address they wrote to you from, even though students never see
+     it. */
+  const matches = (haystack: (string | undefined)[]) => {
+    const q = teacherSearch.trim().toLowerCase();
+    if (!q) return true;
+    return haystack.filter(Boolean).join(' ').toLowerCase().includes(q);
+  };
+
+  /* The classes a teacher is attached to, in the words you would search
+     for: the course, every level ticked on their card, and any group
+     class this month or another whose title names them — the way you
+     write them, "Speaking (Tr Elio)". */
+  const classesFor = (t: TeacherRow): string[] => {
+    const levelList = levels.length ? levels : oneToOneLevels;
+    const levelNames = (t.levels ?? [])
+      .map(id => levelList.find(l => l.id === id)?.name)
+      .filter((n): n is string => Boolean(n));
+
+    const first = t.name.trim().split(/\s+/)[0] ?? '';
+    const groupNames = first.length >= 3
+      ? classes
+          .filter(c => c.name.toLowerCase().includes(first.toLowerCase()))
+          .map(c => c.name)
+      : [];
+
+    return [
+      t.course === 'ielts' ? 'IELTS' : 'General English',
+      ...levelNames,
+      ...groupNames,
+    ];
+  };
+
+  const waiting = submissions
+    .filter(s => !s.handled)
+    .filter(s => matches([s.name, s.email, s.phone, s.telegram, s.courses]));
+
+  const teacherMatches = (t: TeacherRow) => {
+    const p = privateFor(t.id);
+    return matches([
+      t.name, t.blurb, (t.qualifications ?? []).join(' '),
+      classesFor(t).join(' '),
+      p?.email, p?.phone, p?.telegram, p?.payout_name, p?.payout_number,
+    ]);
+  };
+
+  /* Added but not published — you are still agreeing pay or chasing a
+     document. Students cannot see anybody here. */
+  const inProgress = teacherRows.filter(t => t.status !== 'live').filter(teacherMatches);
+
+  /* Accepted and on the website. */
+  const liveTeachers = teacherRows.filter(t => t.status === 'live').filter(teacherMatches);
+
+  /* One teacher's card. Written once here and used by both lists, so the
+     two sections can never drift apart. */
+  const renderTeacherCard = (t: TeacherRow) => (
+    <div key={t.id} className="p-4 rounded-xl border border-gray-200">
+      {t.status === 'pending' && (
+        <p className="mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
+          <strong>Not published.</strong> Students cannot see or book {t.name || 'this teacher'}.
+          Agree the pay below, then change Status to Live and press Save.
+        </p>
+      )}
+
+      <div className="grid md:grid-cols-12 gap-3">
+        <div className="md:col-span-4">
+          <label className="block text-xs text-gray-500 mb-1">Name</label>
+          <input value={t.name} onChange={e => editTeacher(t.id, { name: e.target.value })} className={input} />
+        </div>
+        <div className="md:col-span-3">
+          <label className="block text-xs text-gray-500 mb-1">Course</label>
+          <select value={t.course} onChange={e => editTeacher(t.id, { course: e.target.value as 'general' | 'ielts' })} className={input}>
+            <option value="general">General English</option>
+            <option value="ielts">IELTS</option>
+          </select>
+        </div>
+        <div className="md:col-span-3">
+          <label className="block text-xs text-gray-500 mb-1">Status</label>
+          <select value={t.status}
+            onChange={e => {
+              const next = e.target.value as 'pending' | 'live';
+              if (next === 'live' && !privateFor(t.id)?.agreed_rate) {
+                if (!confirm(
+                  `You have not agreed what ${t.name} is paid yet. Publish them anyway?`,
+                )) return;
+              }
+              editTeacher(t.id, { status: next });
+            }}
+            className={input}>
+            <option value="live">Live — students see them</option>
+            <option value="pending">Pending — hidden</option>
+          </select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-xs text-gray-500 mb-1">Order</label>
+          <input type="number" value={t.sort_order}
+            onChange={e => editTeacher(t.id, { sort_order: Number(e.target.value) })} className={input} />
+        </div>
+
+        <div className="md:col-span-12">
+          <label className="block text-xs text-gray-500 mb-1">Levels they teach</label>
+          <div className="flex flex-wrap gap-2">
+            {(levels.length ? levels : oneToOneLevels).map(l => {
+              const on = t.levels?.includes(l.id);
+              return (
+                <button key={l.id} type="button"
+                  onClick={() => editTeacher(t.id, {
+                    levels: on ? t.levels.filter(x => x !== l.id) : [...(t.levels ?? []), l.id],
+                  })}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                    on ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-300'
+                  }`}>
+                  {l.name}
+                  <span className={on ? 'text-white/70' : 'text-gray-400'}>
+                    {' '}· {(l.fee / 1000).toFixed(0)}k
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="md:col-span-12">
+          <MarginNote levels={levels} chosen={t.levels ?? []} rate={privateFor(t.id)?.agreed_rate ?? ''} />
+        </div>
+
+        <div className="md:col-span-6">
+          <label className="block text-xs text-gray-500 mb-1">
+            Qualifications — separate with commas
+          </label>
+          <input value={(t.qualifications ?? []).join(', ')}
+            onChange={e => editTeacher(t.id, {
+              qualifications: e.target.value.split(',').map(x => x.trim()).filter(Boolean),
+            })}
+            placeholder="TKT Band 3, CELTA" className={input} />
+        </div>
+        <div className="md:col-span-6">
+          <label className="block text-xs text-gray-500 mb-1">
+            Demo lesson — Telegram link only
+          </label>
+          <input value={t.demo_url ?? ''}
+            onChange={e => editTeacher(t.id, { demo_url: e.target.value })}
+            placeholder="https://t.me/…" className={input} />
+          {t.demo_url && !isTelegramLink(t.demo_url) && (
+            <p className="text-xs text-red-600 mt-1">
+              Not a Telegram link — saving this will be refused.
+            </p>
+          )}
+        </div>
+        <div className="md:col-span-12">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={t.teaches_video ?? false}
+              onChange={e => editTeacher(t.id, { teaches_video: e.target.checked })} />
+            Records video classes
+          </label>
+        </div>
+
+        <div className="md:col-span-6">
+          <label className="block text-xs text-gray-500 mb-1">Short description</label>
+          <textarea rows={3} value={t.blurb} onChange={e => editTeacher(t.id, { blurb: e.target.value })}
+            className={`${input} resize-none`} />
+        </div>
+        <div className="md:col-span-6">
+          <label className="block text-xs text-gray-500 mb-1">
+            Available hours — one line per day, as <code>Day | times</code>
+          </label>
+          <textarea rows={3} value={availabilityToText(t.availability)}
+            onChange={e => editTeacher(t.id, { availability: textToAvailability(e.target.value) })}
+            placeholder={'Monday | 6:00–8:00 PM\nSaturday | 1:00–5:00 PM'}
+            className={`${input} resize-none font-mono text-xs`} />
+        </div>
+      </div>
+
+      {(t.photo || t.photo_pending) && (
+        <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-gray-100">
+          {t.photo && (
+            <div className="text-center">
+              <img src={teacherPhotoUrl(t.photo)} alt=""
+                className="w-16 h-16 rounded-full object-cover mx-auto" />
+              <div className="text-xs text-gray-500 mt-1">On the site</div>
+            </div>
+          )}
+          {t.photo_pending && (
+            <div className="text-center">
+              <img src={teacherPhotoUrl(t.photo_pending)} alt=""
+                className="w-16 h-16 rounded-full object-cover mx-auto ring-2 ring-amber-400" />
+              <div className="text-xs text-amber-700 mt-1">Waiting</div>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {t.photo_pending && (
+              <>
+                <button onClick={async () => {
+                  await approveTeacherPhoto(t.id, t.photo_pending); refresh();
+                  flash(`${t.name}'s photo is live.`);
+                }} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
+                  Use this photo
+                </button>
+                <button onClick={async () => { await rejectTeacherPhoto(t.id); refresh(); }}
+                  className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+                  Refuse it
+                </button>
+              </>
+            )}
+            {t.photo && (
+              <button onClick={async () => {
+                if (confirm(`Take ${t.name}'s photo off the website?`)) {
+                  await removeTeacherPhoto(t.id); refresh();
+                }
+              }} className={`${btn} text-red-600 hover:bg-red-50`}>
+                Remove photo
+              </button>
+            )}
+            {!t.photo_consent && t.photo_pending && (
+              <span className="text-xs text-red-600 self-center">
+                They have not ticked the consent box
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <FeePanel teacher={t} offers={offers.filter(o => o.teacher_id === t.id)}
+        agreed={privateFor(t.id)?.agreed_rate ?? ''} onDone={refresh} onFlash={flash} />
+
+      <ReadyChecklist teacher={t} priv={privateFor(t.id)}
+        agreed={privateFor(t.id)?.agreed_rate ?? ''} />
+
+      <TeacherPrivatePanel teacher={t} row={privateFor(t.id)} requests={requests} onSaved={refresh} />
+
+      <div className="flex gap-2 mt-3">
+        <button onClick={() => persistTeacher(t)} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
+          Save {t.name.split(' ')[0]}
+        </button>
+        <button onClick={() => removeTeacher(t)} className={`${btn} text-red-600 hover:bg-red-50 ml-auto`}>
+          Remove
+        </button>
+      </div>
+    </div>
+  );
 
   /* ── reviews ───────────────────────────────────────────────────── */
   const pendingReviews = reviewRows.filter(r => r.status === 'pending');
@@ -566,7 +812,6 @@ export default function Admin() {
     setBusy(false);
     flash('Saved. Students can see your video courses now.');
   };
-  const privateFor = (id: string) => privates.find(p => p.teacher_id === id);
   const teacherName = (id: string) => teacherRows.find(t => t.id === id)?.name ?? 'Teacher';
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -813,12 +1058,57 @@ export default function Admin() {
         {tab === 'teachers' && (
           <>
             <section className="bg-white rounded-2xl border border-gray-200 p-5">
-              <h2 className="font-bold text-gray-900 mb-1">Waiting for you</h2>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[16rem]">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    value={teacherSearch}
+                    onChange={e => setTeacherSearch(e.target.value)}
+                    placeholder="Search by name, class, Gmail, phone or Telegram"
+                    className={`${input} pl-9`}
+                  />
+                </div>
+                {teacherSearch.trim() && (
+                  <button onClick={() => setTeacherSearch('')}
+                    className={`${btn} bg-white border border-gray-300 text-gray-700`}>
+                    Clear
+                  </button>
+                )}
+                <button onClick={exportTeachers} className={`${btn} bg-white border border-gray-300 text-gray-700 flex items-center gap-2`}>
+                  <Download className="w-4 h-4" /> Download for Excel
+                </button>
+              </div>
+
+              {teacherSearch.trim() && (
+                <p className="text-sm text-gray-500 mt-3">
+                  {waiting.length + inProgress.length + liveTeachers.length} match
+                  {waiting.length + inProgress.length + liveTeachers.length === 1 ? '' : 'es'}
+                  {' '}for &ldquo;{teacherSearch.trim()}&rdquo;. Names, the classes they teach,
+                  IELTS or General, Gmail, phone and Telegram are all searched — even the
+                  details students never see.
+                </p>
+              )}
+            </section>
+
+            {/* ── applications you have not started on ──────────────── */}
+            <section className="bg-white rounded-2xl border border-gray-200 p-5">
+              <h2 className="font-bold text-gray-900 mb-1">
+                Waiting for you
+                {waiting.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">
+                    {waiting.length}
+                  </span>
+                )}
+              </h2>
               <p className="text-sm text-gray-500 mb-4">
                 Sent through the website. Nobody can see these but you.
               </p>
 
-              {waiting.length === 0 && <p className="text-sm text-gray-500 py-6 text-center">Nothing waiting.</p>}
+              {waiting.length === 0 && (
+                <p className="text-sm text-gray-500 py-6 text-center">
+                  {teacherSearch.trim() ? 'Nobody waiting matches that.' : 'Nothing waiting.'}
+                </p>
+              )}
 
               <div className="space-y-3">
                 {waiting.map(s => (
@@ -914,203 +1204,56 @@ export default function Admin() {
               </div>
             </section>
 
+            {/* ── added, but not published yet ──────────────────────── */}
             <section className="bg-white rounded-2xl border border-gray-200 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <h2 className="font-bold text-gray-900 mb-1">On the website</h2>
-                <button onClick={exportTeachers} className={`${btn} bg-white border border-gray-300 text-gray-700 flex items-center gap-2`}>
-                  <Download className="w-4 h-4" /> Download for Excel
-                </button>
-              </div>
+              <h2 className="font-bold text-gray-900 mb-1">
+                In progress
+                {inProgress.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-bold">
+                    {inProgress.length}
+                  </span>
+                )}
+              </h2>
               <p className="text-sm text-gray-500 mb-4">
-                Only teachers set to <strong>Live</strong> can be seen and booked by students.
+                Added but not published. Agree the pay, finish their checklist, then set them
+                to <strong>Live</strong> and press Save. Students cannot see anyone here.
               </p>
 
+              {inProgress.length === 0 && (
+                <p className="text-sm text-gray-500 py-6 text-center">
+                  {teacherSearch.trim() ? 'Nobody in progress matches that.' : 'Nobody in progress.'}
+                </p>
+              )}
+
               <div className="space-y-4">
-                {teacherRows.map(t => (
-                  <div key={t.id} className="p-4 rounded-xl border border-gray-200">
-                    {t.status === 'pending' && (
-                      <p className="mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
-                        <strong>Not published.</strong> Students cannot see or book {t.name || 'this teacher'}.
-                        Agree the pay below, then change Status to Live and press Save.
-                      </p>
-                    )}
+                {inProgress.map(renderTeacherCard)}
+              </div>
+            </section>
 
-                    <div className="grid md:grid-cols-12 gap-3">
-                      <div className="md:col-span-4">
-                        <label className="block text-xs text-gray-500 mb-1">Name</label>
-                        <input value={t.name} onChange={e => editTeacher(t.id, { name: e.target.value })} className={input} />
-                      </div>
-                      <div className="md:col-span-3">
-                        <label className="block text-xs text-gray-500 mb-1">Course</label>
-                        <select value={t.course} onChange={e => editTeacher(t.id, { course: e.target.value as 'general' | 'ielts' })} className={input}>
-                          <option value="general">General English</option>
-                          <option value="ielts">IELTS</option>
-                        </select>
-                      </div>
-                      <div className="md:col-span-3">
-                        <label className="block text-xs text-gray-500 mb-1">Status</label>
-                        <select value={t.status}
-                          onChange={e => {
-                            const next = e.target.value as 'pending' | 'live';
-                            if (next === 'live' && !privateFor(t.id)?.agreed_rate) {
-                              if (!confirm(
-                                `You have not agreed what ${t.name} is paid yet. Publish them anyway?`,
-                              )) return;
-                            }
-                            editTeacher(t.id, { status: next });
-                          }}
-                          className={input}>
-                          <option value="live">Live — students see them</option>
-                          <option value="pending">Pending — hidden</option>
-                        </select>
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-xs text-gray-500 mb-1">Order</label>
-                        <input type="number" value={t.sort_order}
-                          onChange={e => editTeacher(t.id, { sort_order: Number(e.target.value) })} className={input} />
-                      </div>
+            {/* ── accepted and published ────────────────────────────── */}
+            <section className="bg-white rounded-2xl border border-gray-200 p-5">
+              <h2 className="font-bold text-gray-900 mb-1">
+                Live on the website
+                {liveTeachers.length > 0 && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-bold">
+                    {liveTeachers.length}
+                  </span>
+                )}
+              </h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Accepted teachers. Students can see these and book them.
+              </p>
 
-                      <div className="md:col-span-12">
-                        <label className="block text-xs text-gray-500 mb-1">Levels they teach</label>
-                        <div className="flex flex-wrap gap-2">
-                          {(levels.length ? levels : oneToOneLevels).map(l => {
-                            const on = t.levels?.includes(l.id);
-                            return (
-                              <button key={l.id} type="button"
-                                onClick={() => editTeacher(t.id, {
-                                  levels: on ? t.levels.filter(x => x !== l.id) : [...(t.levels ?? []), l.id],
-                                })}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                                  on ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-300'
-                                }`}>
-                                {l.name}
-                                <span className={on ? 'text-white/70' : 'text-gray-400'}>
-                                  {' '}· {(l.fee / 1000).toFixed(0)}k
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+              {liveTeachers.length === 0 && (
+                <p className="text-sm text-gray-500 py-6 text-center">
+                  {teacherSearch.trim()
+                    ? 'No live teacher matches that.'
+                    : 'Nobody is live yet. Move someone across from In progress.'}
+                </p>
+              )}
 
-                      <div className="md:col-span-12">
-                        <MarginNote levels={levels} chosen={t.levels ?? []} rate={privateFor(t.id)?.agreed_rate ?? ''} />
-                      </div>
-
-                      <div className="md:col-span-6">
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Qualifications — separate with commas
-                        </label>
-                        <input value={(t.qualifications ?? []).join(', ')}
-                          onChange={e => editTeacher(t.id, {
-                            qualifications: e.target.value.split(',').map(x => x.trim()).filter(Boolean),
-                          })}
-                          placeholder="TKT Band 3, CELTA" className={input} />
-                      </div>
-                      <div className="md:col-span-6">
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Demo lesson — Telegram link only
-                        </label>
-                        <input value={t.demo_url ?? ''}
-                          onChange={e => editTeacher(t.id, { demo_url: e.target.value })}
-                          placeholder="https://t.me/…" className={input} />
-                        {t.demo_url && !isTelegramLink(t.demo_url) && (
-                          <p className="text-xs text-red-600 mt-1">
-                            Not a Telegram link — saving this will be refused.
-                          </p>
-                        )}
-                      </div>
-                      <div className="md:col-span-12">
-                        <label className="flex items-center gap-2 text-sm text-gray-700">
-                          <input type="checkbox" checked={t.teaches_video ?? false}
-                            onChange={e => editTeacher(t.id, { teaches_video: e.target.checked })} />
-                          Records video classes
-                        </label>
-                      </div>
-
-                      <div className="md:col-span-6">
-                        <label className="block text-xs text-gray-500 mb-1">Short description</label>
-                        <textarea rows={3} value={t.blurb} onChange={e => editTeacher(t.id, { blurb: e.target.value })}
-                          className={`${input} resize-none`} />
-                      </div>
-                      <div className="md:col-span-6">
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Available hours — one line per day, as <code>Day | times</code>
-                        </label>
-                        <textarea rows={3} value={availabilityToText(t.availability)}
-                          onChange={e => editTeacher(t.id, { availability: textToAvailability(e.target.value) })}
-                          placeholder={'Monday | 6:00–8:00 PM\nSaturday | 1:00–5:00 PM'}
-                          className={`${input} resize-none font-mono text-xs`} />
-                      </div>
-                    </div>
-
-                    {(t.photo || t.photo_pending) && (
-                      <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-gray-100">
-                        {t.photo && (
-                          <div className="text-center">
-                            <img src={teacherPhotoUrl(t.photo)} alt=""
-                              className="w-16 h-16 rounded-full object-cover mx-auto" />
-                            <div className="text-xs text-gray-500 mt-1">On the site</div>
-                          </div>
-                        )}
-                        {t.photo_pending && (
-                          <div className="text-center">
-                            <img src={teacherPhotoUrl(t.photo_pending)} alt=""
-                              className="w-16 h-16 rounded-full object-cover mx-auto ring-2 ring-amber-400" />
-                            <div className="text-xs text-amber-700 mt-1">Waiting</div>
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-2">
-                          {t.photo_pending && (
-                            <>
-                              <button onClick={async () => {
-                                await approveTeacherPhoto(t.id, t.photo_pending); refresh();
-                                flash(`${t.name}'s photo is live.`);
-                              }} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
-                                Use this photo
-                              </button>
-                              <button onClick={async () => { await rejectTeacherPhoto(t.id); refresh(); }}
-                                className={`${btn} bg-white border border-gray-300 text-gray-700`}>
-                                Refuse it
-                              </button>
-                            </>
-                          )}
-                          {t.photo && (
-                            <button onClick={async () => {
-                              if (confirm(`Take ${t.name}'s photo off the website?`)) {
-                                await removeTeacherPhoto(t.id); refresh();
-                              }
-                            }} className={`${btn} text-red-600 hover:bg-red-50`}>
-                              Remove photo
-                            </button>
-                          )}
-                          {!t.photo_consent && t.photo_pending && (
-                            <span className="text-xs text-red-600 self-center">
-                              They have not ticked the consent box
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <FeePanel teacher={t} offers={offers.filter(o => o.teacher_id === t.id)}
-                      agreed={privateFor(t.id)?.agreed_rate ?? ''} onDone={refresh} onFlash={flash} />
-
-                    <ReadyChecklist teacher={t} priv={privateFor(t.id)}
-                      agreed={privateFor(t.id)?.agreed_rate ?? ''} />
-
-                    <TeacherPrivatePanel teacher={t} row={privateFor(t.id)} requests={requests} onSaved={refresh} />
-
-                    <div className="flex gap-2 mt-3">
-                      <button onClick={() => persistTeacher(t)} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
-                        Save {t.name.split(' ')[0]}
-                      </button>
-                      <button onClick={() => removeTeacher(t)} className={`${btn} text-red-600 hover:bg-red-50 ml-auto`}>
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-4">
+                {liveTeachers.map(renderTeacherCard)}
               </div>
             </section>
           </>
