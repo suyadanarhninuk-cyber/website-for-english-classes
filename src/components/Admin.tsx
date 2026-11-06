@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Check, ChevronLeft, Download, FileText, Loader2, LogOut, Mail, Plus, RefreshCw, Search, Trash2, X,
+  Check, ChevronLeft, Download, FileText, Image as ImageIcon, Loader2, LogOut, Mail, Plus,
+  RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
 import {
   EnrolmentRow, GroupClassRow, ReviewRow, SubmissionRow, TeacherRow,
@@ -20,6 +21,7 @@ import { money, receiptLink } from '../contact';
 import ClassPaste, { ParsedClass } from './ClassPaste';
 import { downloadCsv } from '../csv';
 import { LevelRow, adminLoadLevels, deleteLevel, saveLevel } from '../supabase';
+import { posterUrl, uploadPoster } from '../supabase';
 
 /* The email you send a student once their payment is confirmed. It is
    composed here and opened in your own Gmail, so it comes from your real
@@ -269,6 +271,7 @@ export default function Admin() {
       schedule: '',
       start_date: null,
       seats: '',
+      poster: '',
       visible: true,
       sort_order: monthClasses.length + 1,
     };
@@ -294,7 +297,7 @@ export default function Admin() {
 
   const addLevel = () => setLevels(prev => [...prev, {
     id: `new-${Date.now()}`, course: 'general', name: '', fee: 0,
-    hours: 12, description: '', visible: true, sort_order: prev.length + 1,
+    hours: 12, description: '', poster: '', visible: true, sort_order: prev.length + 1,
   }]);
 
   const addPastedLevels = async (rows: ParsedClass[]) => {
@@ -770,7 +773,7 @@ export default function Admin() {
 
   const addVideo = () => setVideos(prev => [...prev, {
     id: `new-${Date.now()}`, title: '', summary: '', fee: 0, lessons: '',
-    level: '', access_note: '', visible: true, sort_order: prev.length + 1,
+    level: '', access_note: '', poster: '', visible: true, sort_order: prev.length + 1,
   }]);
 
   const addPastedVideos = async (rows: ParsedClass[]) => {
@@ -963,6 +966,10 @@ export default function Admin() {
                       placeholder="Optional line shown under the course name — used on the IELTS card"
                       className={`${input} text-xs`} />
                   </div>
+                  <div className="md:col-span-12">
+                    <PosterField path={l.poster ?? ''} what="this course"
+                      onChange={v => editLevel(l.id, { poster: v })} onFlash={flash} />
+                  </div>
                 </div>
               ))}
 
@@ -1041,6 +1048,10 @@ export default function Admin() {
                     <input value={c.seats} onChange={e => editClass(c.id, { seats: e.target.value })}
                       placeholder="Optional note for students — '4 places left', 'evenings only'"
                       className={`${input} text-xs`} />
+                  </div>
+                  <div className="md:col-span-12">
+                    <PosterField path={c.poster ?? ''} what="this class"
+                      onChange={v => editClass(c.id, { poster: v })} onFlash={flash} />
                   </div>
                 </div>
               ))}
@@ -1326,6 +1337,10 @@ export default function Admin() {
                     <input value={v.access_note} onChange={e => editVideo(v.id, { access_note: e.target.value })}
                       placeholder="What happens after they pay — e.g. we send the link on Telegram"
                       className={`${input} text-xs`} />
+                  </div>
+                  <div className="md:col-span-12">
+                    <PosterField path={v.poster ?? ''} what="this course"
+                      onChange={val => editVideo(v.id, { poster: val })} onFlash={flash} />
                   </div>
                 </div>
               ))}
@@ -2262,6 +2277,72 @@ function ReviewCard({
           </button>
         )}
         <button onClick={onDelete} className={`${btn} text-red-600 hover:bg-red-50 ml-auto`}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+
+/* ── the poster on a class ───────────────────────────────────────────
+   You make the poster yourself; this only carries it to the website.
+   Choosing an image uploads it straight away, but it does not appear to
+   students until you press Save on the section, the same as every other
+   change here.
+
+   Remove only unhooks the picture from the class. The file stays in
+   Supabase, so if you remove one by accident nothing is destroyed —
+   and a student can never land on a class pointing at a deleted image. */
+function PosterField({
+  path, what, onChange, onFlash,
+}: {
+  path: string;
+  what: string;
+  onChange: (path: string) => void;
+  onFlash: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const choose = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    const res = await uploadPoster(file);
+    setBusy(false);
+    if (!res.ok) { onFlash(res.message); return; }
+    onChange(res.path);
+    onFlash('Poster added. Press Save to put it on the website.');
+  };
+
+  return (
+    <div className="flex items-center gap-3 p-2 rounded-xl border border-dashed border-gray-300 bg-gray-50">
+      {path ? (
+        <img src={posterUrl(path)} alt=""
+          className="w-12 h-16 object-cover rounded-lg border border-gray-200 bg-white" />
+      ) : (
+        <div className="w-12 h-16 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-300">
+          <ImageIcon className="w-5 h-5" />
+        </div>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-gray-600">
+          {path ? 'Poster set.' : 'No poster yet.'} Students see it on the home page and
+          beside {what} when they book.
+        </p>
+        <div className="flex items-center gap-4 mt-1.5">
+          <label className={`text-xs font-semibold ${
+            busy ? 'text-gray-400' : 'text-brand-700 hover:text-brand-800 cursor-pointer'
+          }`}>
+            {busy ? 'Uploading…' : path ? 'Replace image' : 'Choose image'}
+            <input type="file" accept="image/*" className="hidden" disabled={busy}
+              onChange={e => { choose(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+          {path && !busy && (
+            <button type="button" onClick={() => onChange('')}
+              className="text-xs font-semibold text-gray-500 hover:text-red-600">
+              Remove
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
