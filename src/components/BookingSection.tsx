@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { oneToOneLevels, site, payment } from '../data';
 import { monthLabel, thisMonth, useContent } from '../content';
+import { PosterLightbox, PosterThumb } from './PosterBoard';
 import {
   Enrolment,
   deliverEnrolment,
@@ -31,6 +32,11 @@ type BookingMode = 'one-to-one' | 'group' | 'video' | null;
 
 export default function BookingSection() {
   const { teachers, groupClasses, months, videoCourses , levels } = useContent();
+
+  /* The poster a student has tapped open, if any. Tapping the little
+     picture beside a class shows it full size without choosing it. */
+  const [poster, setPoster] = useState<{ src: string; caption?: string } | null>(null);
+  const openPoster = (src: string, caption?: string) => setPoster({ src, caption });
 
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<BookingMode>(null);
@@ -420,8 +426,12 @@ export default function BookingSection() {
                 {mode === 'one-to-one' && (
                   <div className="space-y-2 flex-grow">
                     {levels.map(l => (
-                      <button key={l.id} type="button" onClick={() => chooseLevel(l.id)}
-                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
+                      <div key={l.id} className="flex items-stretch gap-2">
+                        {l.poster && (
+                          <PosterThumb path={l.poster} caption={l.name} onOpen={openPoster} />
+                        )}
+                      <button type="button" onClick={() => chooseLevel(l.id)}
+                        className={`flex-1 min-w-0 flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
                           levelId === l.id ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                         }`}>
                         <span>
@@ -434,6 +444,7 @@ export default function BookingSection() {
                         </span>
                         <span className="font-bold text-brand-600 whitespace-nowrap">{money(l.fee)}</span>
                       </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -448,8 +459,12 @@ export default function BookingSection() {
                           </p>
                         )}
                         {list.map(g => (
-                      <button key={g.id} type="button" onClick={() => setGroupCourse(g.name)}
-                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
+                      <div key={g.id} className="flex items-stretch gap-2">
+                        {g.poster && (
+                          <PosterThumb path={g.poster} caption={g.name} onOpen={openPoster} />
+                        )}
+                      <button type="button" onClick={() => setGroupCourse(g.name)}
+                        className={`flex-1 min-w-0 flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
                           groupCourse === g.name ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                         }`}>
                         <span>
@@ -462,6 +477,7 @@ export default function BookingSection() {
                         </span>
                         <span className="font-bold text-brand-600 whitespace-nowrap">{money(g.fee)}</span>
                       </button>
+                      </div>
                         ))}
                       </div>
                     ))}
@@ -477,8 +493,12 @@ export default function BookingSection() {
                 {mode === 'video' && (
                   <div className="space-y-2 flex-grow">
                     {videoCourses.map(v => (
-                      <button key={v.id} type="button" onClick={() => setVideoCourse(v.title)}
-                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
+                      <div key={v.id} className="flex items-stretch gap-2">
+                        {v.poster && (
+                          <PosterThumb path={v.poster} caption={v.title} onOpen={openPoster} />
+                        )}
+                      <button type="button" onClick={() => setVideoCourse(v.title)}
+                        className={`flex-1 min-w-0 flex items-center justify-between gap-4 p-4 rounded-xl border transition-colors text-left ${
                           videoCourse === v.title ? 'border-brand-600 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
                         }`}>
                         <span>
@@ -491,6 +511,7 @@ export default function BookingSection() {
                         </span>
                         <span className="font-bold text-brand-600 whitespace-nowrap">{money(v.fee)}</span>
                       </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -841,6 +862,11 @@ export default function BookingSection() {
           </div>
         </div>
       </div>
+
+      {poster && (
+        <PosterLightbox src={poster.src} caption={poster.caption}
+          onClose={() => setPoster(null)} />
+      )}
     </section>
   );
 }
