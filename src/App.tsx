@@ -9,6 +9,7 @@ import Hero from './components/Hero';
 import Services from './components/Services';
 import Teachers from './components/Teachers';
 import VideoCourses from './components/VideoCourses';
+import PosterBoard from './components/PosterBoard';
 import Testimonials from './components/Testimonials';
 import Faq from './components/Faq';
 import BookingSection from './components/BookingSection';
@@ -59,6 +60,7 @@ export default function App() {
         <Header />
         <main>
           <Hero />
+          <PosterBoard />
           <Services />
           <VideoCourses />
           <Teachers />
