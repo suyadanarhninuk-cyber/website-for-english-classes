@@ -16,6 +16,9 @@ import {
    connected and from src/data.ts when it is not. Nothing on the site
    breaks if Supabase is down or not set up: it falls back. */
 
+/** A course level, plus the poster you uploaded for it (if any). */
+export type PublicLevel = LevelInfo & { poster?: string };
+
 export interface PublicReview {
   quote: string;
   name: string;
@@ -29,7 +32,7 @@ interface Content {
   teachers: Teacher[];
   groupClasses: GroupClassRow[];
   months: string[];
-  levels: LevelInfo[];
+  levels: PublicLevel[];
   reviews: PublicReview[];
   videoCourses: VideoCourseRow[];
 }
@@ -58,6 +61,7 @@ const fallbackGroupClasses = (): GroupClassRow[] =>
     seats: '',
     visible: true,
     sort_order: i,
+    poster: '',
   }));
 
 const fallback: Content = {
@@ -86,9 +90,10 @@ export function ContentProvider({ children }: { children: React.ReactNode }) {
       .then(([data, videos, levels]) => {
         if (cancelled) return;
 
-        const fromDb: LevelInfo[] | null = levels && levels.map(r => ({
+        const fromDb: PublicLevel[] | null = levels && levels.map(r => ({
           id: r.id, course: r.course, name: r.name, fee: r.fee,
           hours: r.hours, description: r.description || undefined,
+          poster: r.poster || '',
         }));
 
         if (!data) {
