@@ -31,6 +31,7 @@ export interface GroupClassRow {
   start_date: string | null;
   seats: string;
   visible: boolean;
+  poster: string;
   sort_order: number;
 }
 
@@ -491,6 +492,39 @@ export function saveTeacherPrivate(row: Partial<TeacherPrivateRow> & { teacher_i
     .upsert({ ...row, updated_at: new Date().toISOString() });
 }
 
+/* ── class posters ─────────────────────────────────────────────────
+   The poster you already made for a class. It sits in a public bucket
+   because a student has to be able to see it without signing in, so
+   never put anything on a poster you would not show the world. */
+
+export function posterUrl(path: string) {
+  if (!supabase || !path) return '';
+  return supabase.storage.from('posters').getPublicUrl(path).data.publicUrl;
+}
+
+export async function uploadPoster(file: File) {
+  if (!supabase) return { ok: false, path: '', message: 'Not connected.' };
+  if (!file.type.startsWith('image/')) {
+    return { ok: false, path: '', message: 'That is not an image. Use a JPG or PNG.' };
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    return { ok: false, path: '', message: 'That image is over 8MB. Export it a bit smaller.' };
+  }
+  const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().slice(0, 5);
+  const path = `${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from('posters').upload(path, file);
+  return error
+    ? { ok: false, path: '', message: error.message }
+    : { ok: true, path, message: '' };
+}
+
+/** Takes the image out of the bucket too, so removing a poster does not
+ *  leave the picture sitting there for anyone with the old link. */
+export async function deletePosterFile(path: string) {
+  if (!supabase || !path) return;
+  await supabase.storage.from('posters').remove([path]);
+}
+
 /* ── teacher photos ────────────────────────────────────────────────── */
 
 export function teacherPhotoUrl(path: string) {
@@ -616,6 +650,7 @@ export interface VideoCourseRow {
   level: string;
   access_note: string;
   visible: boolean;
+  poster: string;
   sort_order: number;
 }
 
@@ -675,6 +710,7 @@ export interface LevelRow {
   hours: number | null;
   description: string;
   visible: boolean;
+  poster: string;
   sort_order: number;
 }
 
