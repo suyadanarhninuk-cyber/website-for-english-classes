@@ -1168,7 +1168,7 @@ export default function Admin() {
                       </p>
                     )}
                     {s.teaches_video && (
-                      <p className="inline-block mt-3 px-2 py-1 rounded-md bg-gold-100 text-brand-800 text-xs font-bold">
+                      <p className="inline-block mt-3 px-2 py-1 rounded-md bg-brand-100 text-brand-800 text-xs font-bold">
                         Wants to record video classes
                       </p>
                     )}
@@ -1571,7 +1571,7 @@ function VoucherCard({ row, onDone }: { row: VoucherRow; onDone: () => void }) {
     <div className="p-4 rounded-xl border border-gray-200">
       <div className="flex flex-wrap items-center gap-3">
         <span className="font-mono font-bold text-gray-900">{row.code}</span>
-        <span className="px-2 py-0.5 rounded bg-gold-100 text-brand-800 text-xs font-bold">
+        <span className="px-2 py-0.5 rounded bg-brand-100 text-brand-800 text-xs font-bold">
           {row.percent}% off
         </span>
         <span className={`px-2 py-0.5 rounded text-xs font-bold ${tone}`}>{word}</span>
