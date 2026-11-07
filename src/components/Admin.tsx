@@ -193,9 +193,12 @@ export default function Admin() {
 
   useEffect(() => { if (signedIn) refresh(); }, [signedIn]);
 
+  /* Messages stay up for 15 seconds, not 3. An error that vanishes
+     before you can read it is worse than no error at all. Click the
+     message to dismiss it sooner. */
   const flash = (message: string) => {
     setNote(message);
-    setTimeout(() => setNote(''), 3000);
+    setTimeout(() => setNote(''), 15000);
   };
 
   /* ── not connected ─────────────────────────────────────────────── */
