@@ -330,7 +330,8 @@ export default function Admin() {
         id: l.id.startsWith('new-') ? courseId(l.name) : l.id,
         course: l.course, name: l.name.trim(), fee: Number(l.fee) || 0,
         hours: l.hours === null || Number.isNaN(Number(l.hours)) ? null : Number(l.hours),
-        description: l.description, visible: l.visible, sort_order: l.sort_order,
+        description: l.description, poster: l.poster ?? '',
+        visible: l.visible, sort_order: l.sort_order,
       });
       if (res.error) { setBusy(false); flash(`Not saved — ${res.error.message}`); return; }
     }
@@ -381,7 +382,8 @@ export default function Admin() {
       const row: Partial<GroupClassRow> = {
         month: c.month, name: c.name.trim(), fee: Number(c.fee) || 0,
         schedule: c.schedule, start_date: c.start_date || null,
-        seats: c.seats, visible: c.visible, sort_order: c.sort_order,
+        seats: c.seats, poster: c.poster ?? '',
+        visible: c.visible, sort_order: c.sort_order,
       };
       if (!c.id.startsWith('new-')) row.id = c.id;
       const res = await saveGroupClass(row);
@@ -805,6 +807,7 @@ export default function Admin() {
       const row: Partial<VideoCourseRow> = {
         title: v.title.trim(), summary: v.summary, fee: Number(v.fee) || 0,
         lessons: v.lessons, level: v.level, access_note: v.access_note,
+        poster: v.poster ?? '',
         visible: v.visible, sort_order: v.sort_order,
       };
       if (!v.id.startsWith('new-')) row.id = v.id;
