@@ -5,9 +5,7 @@ import { site } from '../data';
 
 export default function Hero() {
   return (
-    <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden no-print">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-brand-50 via-white to-white"></div>
-      
+    <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden no-print bg-[radial-gradient(ellipse_at_top,#7a0c0c_0%,#560101_55%,#3f0101_100%)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="text-center max-w-4xl mx-auto">
           <motion.div
@@ -15,8 +13,8 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-50 text-brand-700 text-sm font-medium mb-8 border border-brand-100">
-              <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 text-white text-sm font-medium mb-8 border border-white/25">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
               {site.heroBadge}
             </span>
           </motion.div>
@@ -25,16 +23,16 @@ export default function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-5xl md:text-6xl font-bold text-gray-900 tracking-tight mb-8 leading-[1.15]"
+            className="text-5xl md:text-6xl font-bold text-white tracking-tight mb-8 leading-[1.15]"
           >
-            {site.heroHeadline} <span className="text-brand-600">{site.heroHighlight}</span>
+            {site.heroHeadline} <span className="text-brand-200">{site.heroHighlight}</span>
           </motion.h1>
           
           <motion.p 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-xl text-gray-600 mb-10 leading-relaxed max-w-2xl mx-auto"
+            className="text-xl text-brand-100 mb-10 leading-relaxed max-w-2xl mx-auto"
           >
             {site.heroSubtitle}
           </motion.p>
@@ -47,14 +45,14 @@ export default function Hero() {
           >
             <a 
               href="#booking"
-              className="w-full sm:w-auto px-8 py-4 bg-brand-600 text-white rounded-full font-medium text-lg hover:bg-brand-700 transition-all shadow-lg shadow-brand-200 flex items-center justify-center gap-2 group"
+              className="w-full sm:w-auto px-8 py-4 bg-white text-brand-700 rounded-full font-medium text-lg hover:bg-brand-50 transition-all shadow-lg shadow-brand-900/30 flex items-center justify-center gap-2 group"
             >
               Book your class
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
             <a 
               href="#services"
-              className="w-full sm:w-auto px-8 py-4 bg-white text-gray-700 rounded-full font-medium text-lg hover:bg-gray-50 transition-all shadow-sm border border-gray-200"
+              className="w-full sm:w-auto px-8 py-4 bg-transparent text-white rounded-full font-medium text-lg hover:bg-white/10 transition-all border border-white/35"
             >
               View pricing
             </a>
@@ -64,31 +62,31 @@ export default function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="mt-20 pt-10 border-t border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-8"
+            className="mt-20 pt-10 border-t border-white/15 grid grid-cols-2 md:grid-cols-4 gap-8"
           >
             <div className="flex flex-col items-center justify-center text-center">
-              <Globe className="w-8 h-8 text-brand-500 mb-3" />
-              <div className="text-sm text-gray-900 font-bold">100% Online</div>
-              <div className="text-xs text-gray-500 mt-1">Learn via Zoom</div>
+              <Globe className="w-8 h-8 text-brand-200 mb-3" />
+              <div className="text-sm text-white font-bold">100% Online</div>
+              <div className="text-xs text-brand-200/80 mt-1">Learn via Zoom</div>
             </div>
             <div className="flex flex-col items-center justify-center text-center">
-              <BookOpen className="w-8 h-8 text-brand-500 mb-3" />
-              <div className="text-sm text-gray-900 font-bold">Comprehensive</div>
-              <div className="text-xs text-gray-500 mt-1">General & IELTS</div>
+              <BookOpen className="w-8 h-8 text-brand-200 mb-3" />
+              <div className="text-sm text-white font-bold">Comprehensive</div>
+              <div className="text-xs text-brand-200/80 mt-1">General & IELTS</div>
             </div>
             <div className="flex flex-col items-center justify-center text-center">
-              <div className="flex items-center gap-1 text-amber-400 mb-3 h-8">
+              <div className="flex items-center gap-1 text-white mb-3 h-8">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Star key={i} className="w-5 h-5 fill-current" />
                 ))}
               </div>
-              <div className="text-sm text-gray-900 font-bold">Expert Teachers</div>
-              <div className="text-xs text-gray-500 mt-1">Dedicated feedback</div>
+              <div className="text-sm text-white font-bold">Expert Teachers</div>
+              <div className="text-xs text-brand-200/80 mt-1">Dedicated feedback</div>
             </div>
             <div className="flex flex-col items-center justify-center text-center">
-              <Clock className="w-8 h-8 text-brand-500 mb-3" />
-              <div className="text-sm text-gray-900 font-bold">Flexible Hours</div>
-              <div className="text-xs text-gray-500 mt-1">{site.timezoneLabel}</div>
+              <Clock className="w-8 h-8 text-brand-200 mb-3" />
+              <div className="text-sm text-white font-bold">Flexible Hours</div>
+              <div className="text-xs text-brand-200/80 mt-1">{site.timezoneLabel}</div>
             </div>
           </motion.div>
         </div>

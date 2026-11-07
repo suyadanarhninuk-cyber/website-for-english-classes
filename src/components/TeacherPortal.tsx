@@ -177,13 +177,13 @@ export default function TeacherPortal() {
   };
 
   return (
-    <section id="teach" className="py-20 bg-gray-50 border-t-4 border-gold-500 scroll-mt-24 no-print">
+    <section id="teach" className="py-20 bg-gray-50 border-t-4 border-brand-600 scroll-mt-24 no-print">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-2 gap-10 items-start">
 
           {/* left column */}
           <div>
-            <span className="inline-block px-3 py-1 rounded-full bg-gold-100 text-brand-700 text-xs font-bold tracking-wide uppercase mb-4">
+            <span className="inline-block px-3 py-1 rounded-full bg-brand-100 text-brand-700 text-xs font-bold tracking-wide uppercase mb-4">
               For teachers
             </span>
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight mb-4">
@@ -273,7 +273,7 @@ export default function TeacherPortal() {
                   <ul className="space-y-1.5">
                     {guidance[mode].steps.map(s => (
                       <li key={s} className="flex gap-2 text-sm text-gray-700">
-                        <span className="text-gold-500 shrink-0">◆</span>
+                        <span className="text-brand-500 shrink-0">◆</span>
                         <span>{s}</span>
                       </li>
                     ))}

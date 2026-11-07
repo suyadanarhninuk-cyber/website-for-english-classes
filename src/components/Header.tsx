@@ -4,7 +4,7 @@ import { site } from '../data';
 
 export default function Header() {
   return (
-    <header className="fixed top-0 left-0 right-0 bg-white/85 backdrop-blur-md z-50 border-b border-gray-100 no-print">
+    <header className="fixed top-0 left-0 right-0 bg-white backdrop-blur-md z-50 border-b border-gray-200 no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
         <motion.a
           href="#"
@@ -42,7 +42,7 @@ export default function Header() {
           {/* Returning students — their discount lives behind this. */}
           <a
             href="#returning"
-            className="px-4 sm:px-5 py-2.5 bg-gold-500 text-brand-800 text-sm font-semibold rounded-full hover:bg-gold-400 transition-colors whitespace-nowrap"
+            className="px-4 sm:px-5 py-2.5 bg-brand-100 text-brand-800 text-sm font-semibold rounded-full hover:bg-brand-200 transition-colors whitespace-nowrap"
           >
             <span className="hidden sm:inline">Studied with us before?</span>
             <span className="sm:hidden">5–10% off</span>

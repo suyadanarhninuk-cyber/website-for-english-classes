@@ -110,7 +110,7 @@ export default function Teachers() {
               {(t.qualifications?.length ?? 0) > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {t.qualifications!.map(q => (
-                    <span key={q} className="text-xs font-semibold px-2 py-1 rounded-md bg-gold-100 text-brand-800">
+                    <span key={q} className="text-xs font-semibold px-2 py-1 rounded-md bg-brand-50 text-brand-800">
                       {q}
                     </span>
                   ))}
