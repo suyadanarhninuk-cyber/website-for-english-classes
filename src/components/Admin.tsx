@@ -864,9 +864,22 @@ export default function Admin() {
         </div>
       </header>
 
+      {/* Floats above the page instead of sitting at the top of it. The
+          teacher list is long, and a message you have scrolled past is
+          the same as no message at all. Click it to dismiss. */}
       {note && (
-        <div className="max-w-5xl mx-auto px-4 pt-4">
-          <div className="px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">{note}</div>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
+          <div
+            onClick={() => setNote('')}
+            role="status"
+            className={`px-4 py-3 rounded-xl shadow-xl text-sm cursor-pointer ${
+              /denied|error|failed|not saved|could not|would not|violates|does not exist|permission|invalid/i
+                .test(note)
+                ? 'bg-red-600 text-white'
+                : 'bg-green-700 text-white'
+            }`}>
+            {note}
+          </div>
         </div>
       )}
 
