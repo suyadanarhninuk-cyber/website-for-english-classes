@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Check, ChevronLeft, Download, FileText, Image as ImageIcon, Loader2, LogOut, Mail, Plus,
   RefreshCw, Search, Trash2, X,
@@ -641,9 +641,8 @@ export default function Admin() {
           <label className="block text-xs text-gray-500 mb-1">
             Available hours — one line per day, as <code>Day | times</code>
           </label>
-          <textarea rows={3} value={availabilityToText(t.availability)}
-            onChange={e => editTeacher(t.id, { availability: textToAvailability(e.target.value) })}
-            placeholder={'Monday | 6:00–8:00 PM\nSaturday | 1:00–5:00 PM'}
+          <HoursBox value={t.availability}
+            onChange={a => editTeacher(t.id, { availability: a })}
             className={`${input} resize-none font-mono text-xs`} />
         </div>
       </div>
@@ -2380,5 +2379,51 @@ function PosterField({
         </div>
       </div>
     </div>
+  );
+}
+
+
+/* ── the available-hours box ─────────────────────────────────────────
+   This used to turn whatever you typed into data on every keystroke,
+   and quietly dropped any line that was not finished yet. So typing
+   "M" for Monday produced a line with no times, which was thrown away,
+   which wiped the box — you could never reach the end of a word.
+
+   Now the box keeps your words exactly as you type them, and only the
+   finished lines are turned into hours behind the scenes. It still
+   refreshes itself if the record changes somewhere else, such as when
+   a teacher sends new hours of their own. */
+function HoursBox({
+  value, onChange, className,
+}: {
+  value: Availability[];
+  onChange: (a: Availability[]) => void;
+  className?: string;
+}) {
+  const [text, setText] = useState(() => availabilityToText(value));
+  const mine = useRef(availabilityToText(value));
+
+  useEffect(() => {
+    const incoming = availabilityToText(value);
+    if (incoming !== mine.current) {
+      mine.current = incoming;
+      setText(incoming);
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      rows={3}
+      value={text}
+      onChange={e => {
+        const next = e.target.value;
+        setText(next);
+        const parsed = textToAvailability(next);
+        mine.current = availabilityToText(parsed);
+        onChange(parsed);
+      }}
+      placeholder={'Monday | 6:00–8:00 PM\nSaturday | 1:00–5:00 PM'}
+      className={className}
+    />
   );
 }
