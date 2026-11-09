@@ -447,6 +447,20 @@ export default function Admin() {
   const editTeacher = (id: string, patch: Partial<TeacherRow>) =>
     setTeacherRows(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
 
+  /* Publishing in one press. The old way needed you to find a dropdown,
+     change it, then remember to press Save — so a teacher stayed hidden
+     if you did only half of it. This does both at once. */
+  const publishTeacher = async (t: TeacherRow, live: boolean) => {
+    if (live && !privateFor(t.id)?.agreed_rate) {
+      if (!confirm(
+        `You have not agreed what ${t.name} is paid yet. Publish them anyway?`,
+      )) return;
+    }
+    const next: TeacherRow = { ...t, status: live ? 'live' : 'pending' };
+    editTeacher(t.id, { status: next.status });
+    await persistTeacher(next);
+  };
+
   const persistTeacher = async (t: TeacherRow) => {
     setBusy(true);
     const { error } = await saveTeacher({
@@ -548,20 +562,11 @@ export default function Admin() {
         </div>
         <div className="md:col-span-3">
           <label className="block text-xs text-gray-500 mb-1">Status</label>
-          <select value={t.status}
-            onChange={e => {
-              const next = e.target.value as 'pending' | 'live';
-              if (next === 'live' && !privateFor(t.id)?.agreed_rate) {
-                if (!confirm(
-                  `You have not agreed what ${t.name} is paid yet. Publish them anyway?`,
-                )) return;
-              }
-              editTeacher(t.id, { status: next });
-            }}
-            className={input}>
-            <option value="live">Live — students see them</option>
-            <option value="pending">Pending — hidden</option>
-          </select>
+          <div className={`${input} flex items-center font-semibold ${
+            t.status === 'live' ? 'text-green-700' : 'text-amber-700'
+          }`}>
+            {t.status === 'live' ? 'On the website' : 'Not published'}
+          </div>
         </div>
         <div className="md:col-span-2">
           <label className="block text-xs text-gray-500 mb-1">Order</label>
@@ -700,7 +705,18 @@ export default function Admin() {
 
       <TeacherPrivatePanel teacher={t} row={privateFor(t.id)} requests={requests} onSaved={refresh} />
 
-      <div className="flex gap-2 mt-3">
+      <div className="flex flex-wrap gap-2 mt-3">
+        {t.status === 'live' ? (
+          <button onClick={() => publishTeacher(t, false)} disabled={busy}
+            className={`${btn} bg-white text-amber-700 border border-amber-300 hover:bg-amber-50`}>
+            Take off the website
+          </button>
+        ) : (
+          <button onClick={() => publishTeacher(t, true)} disabled={busy}
+            className={`${btn} bg-green-700 text-white hover:bg-green-800`}>
+            Publish on the website
+          </button>
+        )}
         <button onClick={() => persistTeacher(t)} disabled={busy} className={`${btn} bg-brand-600 text-white hover:bg-brand-700`}>
           Save {t.name.split(' ')[0]}
         </button>
